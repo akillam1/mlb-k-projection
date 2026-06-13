@@ -1,0 +1,34 @@
+name: Weekly retrain
+# Sunday night ET (Monday 08:00 UTC): full retrain on expanding window (roadmap §5.5).
+
+on:
+  schedule:
+    - cron: "0 8 * * 1"
+  workflow_dispatch:
+    inputs:
+      quick:
+        description: quick mode (small trees, for testing)
+        type: boolean
+        default: false
+
+concurrency:
+  group: kproj-db
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  retrain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-kproj
+      - name: Retrain
+        run: python -m kproj retrain ${{ inputs.quick && '--quick' || '' }}
+      - name: Refresh exports with new version
+        run: python -m kproj export
+      - uses: ./.github/actions/save-kproj
+        with:
+          save-models: "true"

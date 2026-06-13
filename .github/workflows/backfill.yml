@@ -1,0 +1,53 @@
+name: Backfill history
+# Manual, resumable. Run once per season chunk, e.g.:
+#   start_date 2022-03-01, end_date 2022-11-15   (repeat for 2023, 2024, 2025, 2026→today)
+# Safe to re-run: completed chunks are skipped. Each season takes ~30-60 min.
+# Set fetch_weather=true on the FINAL run to also pull the historical weather archive.
+
+on:
+  workflow_dispatch:
+    inputs:
+      start_date:
+        description: YYYY-MM-DD
+        required: true
+      end_date:
+        description: YYYY-MM-DD (blank = yesterday)
+        required: false
+        default: ""
+      fetch_weather:
+        description: also backfill historical weather (run after all seasons ingested)
+        type: boolean
+        default: false
+
+concurrency:
+  group: kproj-db
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-kproj
+        with:
+          need-models: "false"
+      - name: Backfill
+        run: |
+          if [ -n "${{ inputs.end_date }}" ]; then
+            python -m kproj backfill --start "${{ inputs.start_date }}" --end "${{ inputs.end_date }}"
+          else
+            python -m kproj backfill --start "${{ inputs.start_date }}"
+          fi
+      - name: Weather archive
+        if: ${{ inputs.fetch_weather }}
+        run: |
+          Y0=$(echo "${{ inputs.start_date }}" | cut -c1-4)
+          Y1=$(date -u +%Y)
+          python -m kproj backfill-weather --years "$Y0,$Y1"
+      - uses: ./.github/actions/save-kproj
+        with:
+          commit-site: "false"

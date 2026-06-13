@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>K Board — Performance</title>
+<link rel="stylesheet" href="assets/style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <header class="site">
+    <h1>⚾ K Board</h1>
+    <span class="sub" id="subtitle">the full record — wins and losses</span>
+  </header>
+  <nav class="tabs">
+    <a href="index.html">Today</a>
+    <a href="performance.html" class="active">Performance</a>
+    <a href="methodology.html">Methodology</a>
+  </nav>
+
+  <h2 class="sec">Betting record (positive-EV picks, lifetime)</h2>
+  <div class="tiles" id="bet-tiles"></div>
+
+  <h2 class="sec">Recent form</h2>
+  <div class="tiles" id="form-tiles"></div>
+
+  <h2 class="sec">Projection accuracy</h2>
+  <div class="tiles" id="proj-tiles"></div>
+  <canvas id="maeChart" height="170"></canvas>
+
+  <h2 class="sec">Calibration — predicted vs actual hit rate</h2>
+  <canvas id="calChart" height="220"></canvas>
+
+  <h2 class="sec">Recent bets</h2>
+  <table class="t" id="bets"><thead><tr>
+    <th>Date</th><th>Pick</th><th>Odds</th><th>Result</th><th>P/L</th><th>CLV</th>
+  </tr></thead><tbody></tbody></table>
+
+  <h2 class="sec">Model versions</h2>
+  <table class="t" id="versions"><thead><tr>
+    <th>Version</th><th>Trained</th><th>Backtest MAE</th><th>Live starts</th><th>Live MAE</th>
+  </tr></thead><tbody></tbody></table>
+
+  <footer class="site">
+    Every projection and settled pick is logged automatically; history is never edited.
+    Low-sample warnings stay up until 500 settled bets. 1-800-GAMBLER.
+  </footer>
+</div>
+<script src="assets/perf.js"></script>
+</body>
+</html>

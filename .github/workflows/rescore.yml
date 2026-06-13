@@ -1,0 +1,29 @@
+name: Rescore on line entry
+# Fires when lines/manual_lines.csv changes (e.g. edited from the GitHub mobile app).
+# Ingests the new K lines, recomputes edges against existing projections, updates the site.
+
+on:
+  push:
+    branches: [main]
+    paths: ["lines/**"]
+  workflow_dispatch:
+
+concurrency:
+  group: kproj-db
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  rescore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-kproj
+        with:
+          need-models: "false"
+      - name: Rescore
+        run: python -m kproj rescore
+      - uses: ./.github/actions/save-kproj

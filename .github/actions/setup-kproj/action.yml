@@ -1,0 +1,35 @@
+name: Setup kproj
+description: Python + deps + pull SQLite DB and model artifacts from the rolling release
+inputs:
+  need-models:
+    description: download model artifacts too
+    default: "true"
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+        cache: pip
+    - shell: bash
+      run: pip install -q -r requirements.txt
+    - name: Restore DB + models from rolling release
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -e
+        mkdir -p data models
+        if gh release download data-latest -p kproj.db.gz -D data --clobber 2>/dev/null; then
+          gunzip -f data/kproj.db.gz
+          echo "DB restored: $(du -h data/kproj.db | cut -f1)"
+        else
+          echo "No rolling DB release yet — starting fresh."
+        fi
+        if [ "${{ inputs.need-models }}" = "true" ]; then
+          if gh release download data-latest -p models.tgz --clobber 2>/dev/null; then
+            tar xzf models.tgz && echo "Models restored."
+          else
+            echo "No model artifacts yet."
+          fi
+        fi

@@ -1,0 +1,46 @@
+name: Save kproj state
+description: Push SQLite DB (and optionally models) back to the rolling release; commit site JSON
+inputs:
+  save-models:
+    description: upload model artifacts too
+    default: "false"
+  commit-site:
+    description: commit docs/data JSON to the repo
+    default: "true"
+runs:
+  using: composite
+  steps:
+    - name: Upload DB (+ models) to rolling release
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -e
+        gh release view data-latest >/dev/null 2>&1 || \
+          gh release create data-latest --title "Rolling data" \
+            --notes "Auto-updated SQLite DB + model artifacts. Do not delete." --latest=false
+        if [ -f data/kproj.db ]; then
+          gzip -c data/kproj.db > kproj.db.gz
+          gh release upload data-latest kproj.db.gz --clobber
+          echo "DB uploaded: $(du -h kproj.db.gz | cut -f1)"
+        fi
+        if [ "${{ inputs.save-models }}" = "true" ] && ls models/*.txt >/dev/null 2>&1; then
+          tar czf models.tgz models/*.txt
+          gh release upload data-latest models.tgz --clobber
+          echo "Models uploaded."
+        fi
+    - name: Commit site data
+      if: ${{ inputs.commit-site == 'true' }}
+      shell: bash
+      run: |
+        set -e
+        git config user.name "kproj-bot"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git add docs/data
+        if git diff --cached --quiet; then
+          echo "No site changes."
+        else
+          git commit -m "data: refresh $(date -u +'%Y-%m-%dT%H:%MZ') [skip ci]"
+          git pull --rebase origin ${GITHUB_REF_NAME} || true
+          git push
+        fi

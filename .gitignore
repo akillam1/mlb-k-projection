@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+data/kproj.db
+data/kproj.db-*
+models/*.txt
+models/*.json
+.DS_Store
+*.log

@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>K Board — Methodology</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="site">
+    <h1>⚾ K Board</h1>
+    <span class="sub">how the sausage is made</span>
+  </header>
+  <nav class="tabs">
+    <a href="index.html">Today</a>
+    <a href="performance.html">Performance</a>
+    <a href="methodology.html" class="active">Methodology</a>
+  </nav>
+
+  <div class="prose">
+    <h2>What this is</h2>
+    <p>A hobby model that projects strikeout totals for every MLB starting pitcher,
+    compares them to sportsbook over/under lines, and ranks any positive-expected-value
+    edges. It runs itself: data refreshes several times a day, every projection is
+    logged before games start, and results are reconciled automatically overnight.
+    Nothing is ever deleted or cherry-picked — the
+    <a href="performance.html" style="color:var(--accent)">Performance page</a> is the
+    whole record.</p>
+
+    <h2>The model</h2>
+    <p>A LightGBM gradient-boosted tree model with a Poisson objective produces the
+    point estimate, and five separate quantile models (p10/p25/p50/p75/p90) trace the
+    predictive distribution. A smooth monotone curve (PCHIP) through those quantiles
+    gives the probability of clearing any line. It retrains weekly on an expanding
+    window of every start since 2022.</p>
+
+    <h3>Features, in order of importance</h3>
+    <ul>
+      <li><b>Pitcher swing-and-miss form:</b> CSW% (called strikes + whiffs per pitch),
+      SwStr%, and K% as exponentially-weighted averages with a half-life of ~5 starts.
+      CSW% stabilizes much faster than K%, which is why it leads.</li>
+      <li><b>Opponent lineup K% vs handedness:</b> slot-weighted strikeout rate of the
+      nine projected hitters against the pitcher's hand, blending the last 30 days (60%)
+      with the season (40%).</li>
+      <li><b>Expected workload:</b> recent batters-faced average plus the game's run
+      environment (Vegas total when available, otherwise both teams' recent scoring).</li>
+      <li><b>Stabilizers and context:</b> K-BB%, fastball velocity trend (fatigue flag),
+      park K factor, home-plate umpire tendency, temperature/wind for outdoor parks,
+      home/away, days of rest.</li>
+      <li><b>Early-season prior:</b> a Marcel-style regressed prior from last season,
+      blended by sample size — the model leans on the prior in April and on current form
+      by June (weight = BF / (BF + 70)).</li>
+      <li><b>Deliberately excluded:</b> batter-vs-pitcher history (mostly noise under
+      ~25 PA).</li>
+    </ul>
+
+    <h3>When lineups aren't posted yet</h3>
+    <p>Lineup cards usually post 30–90 minutes before first pitch. Until then the model
+    falls back: confirmed lineup → most-used hitters over the last 7 days → team-average
+    K% vs hand. Each tier carries a <i>lineup confidence</i> (1.0 / 0.6 / 0.3) shown on
+    every card, and lower confidence widens the projected range and discounts the edge
+    score rather than pretending certainty.</p>
+
+    <h2>Edge math</h2>
+    <p>For each entered line we strip the vig from the two-way price
+    (multiplicative method), read the model's probability off the projected
+    distribution, and compute expected value per unit and a quarter-Kelly stake.
+    Picks are ranked by <code>EV × book weight × confidence weight</code>. Only
+    positive-EV sides are surfaced — a losing bet dressed up as a pick helps no one.</p>
+
+    <h2>Honest limitations</h2>
+    <ul>
+      <li>K prop lines are entered manually from the books we use (free APIs don't
+      carry props), so coverage is whatever we type in, when we type it.</li>
+      <li>CLV is only measured when a closing line is also entered.</li>
+      <li>Retractable-roof parks: day-of roof status isn't freely available, so weather
+      is attenuated rather than exact.</li>
+      <li>Trust the calibration plot and 30-day panel over any single hot streak;
+      below ~500 settled bets the ROI number is mostly luck either way.</li>
+    </ul>
+
+    <h2>Disclaimer</h2>
+    <p>Personal research project for fun among friends. Model output, not betting
+    advice. Sports betting involves risk — never bet money you can't afford to lose.
+    If it stops being fun, call or text 1-800-GAMBLER.</p>
+  </div>
+
+  <footer class="site">Built on free, public data: MLB Stats API, Baseball Savant,
+  Open-Meteo. Stack: SQLite + LightGBM + GitHub Actions + GitHub Pages — total cost $0.</footer>
+</div>
+</body>
+</html>
