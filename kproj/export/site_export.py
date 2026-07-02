@@ -96,11 +96,15 @@ def _k_line_summary(con, date_s: str, pitcher_id: int) -> dict | None:
 
 
 def _edges_for(con, game_pk: int, pitcher_id: int) -> list:
+    """Ranked by probability edge: model win % minus the vig-free market win %.
+    That is the cleanest 'how much more often does the model think this wins
+    than the market does' number; EV and quarter-Kelly ride along for sizing."""
     rows = con.execute(
         """SELECT book, line, side, odds, model_prob, vigfree_prob, ev_per_unit,
-                  kelly_quarter, score
+                  kelly_quarter, score,
+                  ROUND(model_prob - vigfree_prob, 4) AS prob_edge
            FROM opportunities WHERE game_pk=? AND pitcher_id=? AND is_latest=1
-           ORDER BY score DESC""",
+           ORDER BY prob_edge DESC, ev_per_unit DESC""",
         (game_pk, pitcher_id),
     ).fetchall()
     return [dict(r) for r in rows]

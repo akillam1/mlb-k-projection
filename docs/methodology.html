@@ -63,18 +63,25 @@
     every card, and lower confidence widens the projected range and discounts the edge
     score rather than pretending certainty.</p>
 
-    <h2>Edge math</h2>
-    <p>For each entered line we strip the vig from the two-way price
-    (multiplicative method), read the model's probability off the projected
-    distribution, and compute expected value per unit and a quarter-Kelly stake.
-    Picks are ranked by <code>EV × book weight × confidence weight</code>. Only
-    positive-EV sides are surfaced — a losing bet dressed up as a pick helps no one.</p>
+    <h2>Edge math &amp; pick ranking</h2>
+    <p>For each K line we strip the vig from the two-way price (multiplicative
+    method) to get the market's true win probability, and read the model's win
+    probability off the projected distribution. The difference is the
+    <b>probability edge</b>:</p>
+    <p><code>prob edge = model win % − vig-free market win %</code></p>
+    <p>Picks are ranked by probability edge, biggest first — it directly answers
+    "how much more often does the model think this bet wins than the market
+    does?" Each pick also shows the model's win %, expected value per unit, and
+    a quarter-Kelly stake for sizing. Only positive-EV sides are surfaced — a
+    high win probability at a price that still loses money long-run (heavy vig)
+    is not a pick.</p>
 
     <h2>Honest limitations</h2>
     <ul>
-      <li>K prop lines are entered manually from the books we use (free APIs don't
-      carry props), so coverage is whatever we type in, when we type it.</li>
-      <li>CLV is only measured when a closing line is also entered.</li>
+      <li>K prop lines pull automatically once a day from US books (free-tier
+      credit budget); lines that move after the morning snapshot are stale until
+      the next pull or a manual entry overrides them.</li>
+      <li>CLV is only measured when a closing line is entered manually.</li>
       <li>Retractable-roof parks: day-of roof status isn't freely available, so weather
       is attenuated rather than exact.</li>
       <li>Trust the calibration plot and 30-day panel over any single hot streak;

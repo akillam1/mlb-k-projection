@@ -46,8 +46,12 @@ function marketRow(s) {
     <span class="mkt-src">${o.books} book${o.books === 1 ? "" : "s"}${asof}</span></div>`;
 }
 
+/* Probability edge: model win % minus vig-free market win %. Primary ranking. */
+const probEdge = (e) => (e.prob_edge != null ? e.prob_edge : (e.model_prob - e.vigfree_prob));
+
 function edgeRows(edges) {
-  const pos = (edges || []).filter((e) => e.ev_per_unit > 0).sort((a, b) => b.score - a.score);
+  const pos = (edges || []).filter((e) => e.ev_per_unit > 0)
+    .sort((a, b) => probEdge(b) - probEdge(a));
   if (!pos.length) {
     return (edges || []).length
       ? '<div class="noedge">No +EV side vs current K lines.</div>'
@@ -57,8 +61,8 @@ function edgeRows(edges) {
     <div class="edge-row">
       <span class="pick">${e.side === "over" ? "▲ Over" : "▼ Under"} ${e.line}
         <span class="bk">${esc(e.book)} ${e.odds > 0 ? "+" + e.odds : e.odds}</span></span>
-      <span class="nums"><span class="ev-pos">+${(e.ev_per_unit * 100).toFixed(1)}% EV</span>
-        <span class="kelly">· ¼K ${(e.kelly_quarter * 100).toFixed(1)}%u · p ${(e.model_prob * 100).toFixed(0)}%</span></span>
+      <span class="nums"><span class="ev-pos">win ${(e.model_prob * 100).toFixed(0)}% (+${(probEdge(e) * 100).toFixed(1)} pts)</span>
+        <span class="kelly">· +${(e.ev_per_unit * 100).toFixed(1)}% EV · ¼K ${(e.kelly_quarter * 100).toFixed(1)}%u</span></span>
     </div>`).join("") + `</div>`;
 }
 
@@ -86,7 +90,7 @@ function card(s) {
 
 function bestScore(s) {
   const pos = (s.edges || []).filter((e) => e.ev_per_unit > 0);
-  return pos.length ? Math.max(...pos.map((e) => e.score)) : -1;
+  return pos.length ? Math.max(...pos.map(probEdge)) : -1;
 }
 
 async function main() {

@@ -184,7 +184,7 @@ where the robots live; a "workflow" is one robot task.
 | **Proj K** (big number) | Most likely strikeout total for that start |
 | **The bar** (p10–p90) | Realistic range. 8 times out of 10 the real number should land in the shaded band |
 | **Lineup confidence** | Green = official lineup posted. Yellow/red = model is guessing the lineup (it guesses well, but ranges widen) |
-| **+EV edge** | "Positive expected value" — based on the model, this bet pays more than its risk over the long run. No edge shown = no good bet, which is most of the time. That's honest, not broken |
+| **Picks under a card** | Ranked by **probability edge** — how many points more often the model expects the bet to win vs the market's vig-free number. "win 61% (+4.2 pts)" = model says 61%, market implies ~57%. Only positive-EV sides show. No pick = no good bet, which is most of the time. That's honest, not broken |
 | **¼K (quarter-Kelly)** | Suggested bet size as % of your bankroll, deliberately conservative |
 | **Performance page** | The model's full track record — ROI, hit rate, and whether its confidence matches reality (calibration). If the model is cold, this page will say so |
 
