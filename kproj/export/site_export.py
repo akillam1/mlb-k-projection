@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from .. import config, db, util
+from ..ingest.odds import gameline_snapshot
 
 ET = ZoneInfo(config.ET_ZONE)
 
@@ -41,8 +42,12 @@ def export_today(con, d) -> None:
         (date_s,),
     ).fetchall()
     starters = []
+    odds_cache: dict = {}
     for r in rows:
         opp_team = r["away_team"] if r["team"] == r["home_team"] else r["home_team"]
+        pk = r["game_pk"]
+        if pk not in odds_cache:
+            odds_cache[pk] = gameline_snapshot(con, pk)
         entry = {
             "game_pk": r["game_pk"],
             "pitcher": r["pitcher_name"],
@@ -55,6 +60,7 @@ def export_today(con, d) -> None:
             "venue": r["venue_name"],
             "temp_f": r["temp_f"],
             "wind_mph": r["wind_mph"],
+            "odds": odds_cache[pk],
         }
         if r["proj_id"]:
             tier = "?"
@@ -145,6 +151,83 @@ def _calibration(con) -> list:
     ]
 
 
+def _market_rows(con, since: str | None) -> list:
+    """One row per settled (game, pitcher, book, line): the side the model
+    favored, its result/PnL at 1u flat, plus model point est vs the line."""
+    where = "AND b.date >= ?" if since else ""
+    args = (since,) if since else ()
+    return con.execute(
+        f"""SELECT * FROM (
+              SELECT b.date, o.game_pk, o.pitcher_id, o.book, o.line, b.side,
+                     b.odds, b.model_prob, b.actual_k, b.result, b.pnl_units,
+                     pr.point_est,
+                     ROW_NUMBER() OVER (
+                       PARTITION BY o.game_pk, o.pitcher_id, o.book, o.line
+                       ORDER BY b.model_prob DESC) rn
+              FROM bet_results b
+              JOIN opportunities o ON o.id = b.opportunity_id
+              LEFT JOIN projection_results pr
+                     ON pr.game_pk = o.game_pk AND pr.pitcher_id = o.pitcher_id
+              WHERE o.is_latest = 1 AND b.result IN ('win','loss','push') {where}
+            ) WHERE rn = 1 ORDER BY date""",
+        args,
+    ).fetchall()
+
+
+def _market_metrics(rows) -> dict:
+    """Model vs the K lines it was compared against (every line, not just +EV)."""
+    n = len(rows)
+    wins = sum(1 for r in rows if r["result"] == "win")
+    losses = sum(1 for r in rows if r["result"] == "loss")
+    units = sum(r["pnl_units"] or 0.0 for r in rows)
+    acc = [
+        (abs(r["point_est"] - r["actual_k"]), abs(r["line"] - r["actual_k"]))
+        for r in rows
+        if r["point_est"] is not None and r["actual_k"] is not None
+    ]
+    closer = sum(1 for m, l in acc if m < l)
+    return {
+        "n": n,
+        "wins": wins,
+        "losses": losses,
+        "pushes": n - wins - losses,
+        "hit_pct": round(wins / (wins + losses) * 100, 1) if wins + losses else None,
+        "units": round(units, 2),
+        "roi_pct": round(units / n * 100, 2) if n else None,
+        "model_mae": round(sum(m for m, _ in acc) / len(acc), 3) if acc else None,
+        "line_mae": round(sum(l for _, l in acc) / len(acc), 3) if acc else None,
+        "model_closer_pct": round(closer / len(acc) * 100, 1) if acc else None,
+        "low_sample": n < 200,
+    }
+
+
+def _market_cum_pnl(rows) -> list:
+    by_date: dict = {}
+    for r in rows:
+        by_date[r["date"]] = by_date.get(r["date"], 0.0) + (r["pnl_units"] or 0.0)
+    cum, out = 0.0, []
+    for d in sorted(by_date):
+        cum += by_date[d]
+        out.append({"date": d, "units": round(cum, 2)})
+    return out
+
+
+def _market_monthly(rows) -> list:
+    months: dict = {}
+    for r in rows:
+        if r["point_est"] is None or r["actual_k"] is None:
+            continue
+        m = months.setdefault(r["date"][:7], {"n": 0, "me": 0.0, "le": 0.0})
+        m["n"] += 1
+        m["me"] += abs(r["point_est"] - r["actual_k"])
+        m["le"] += abs(r["line"] - r["actual_k"])
+    return [
+        {"month": k, "n": v["n"],
+         "model_mae": round(v["me"] / v["n"], 3), "line_mae": round(v["le"] / v["n"], 3)}
+        for k, v in sorted(months.items())
+    ]
+
+
 def export_performance(con) -> None:
     today = datetime.now(timezone.utc).date()
     d30 = (today - timedelta(days=30)).isoformat()
@@ -160,6 +243,8 @@ def export_performance(con) -> None:
                   (SELECT AVG(pr.abs_error) FROM projection_results pr WHERE pr.model_version = m.version) live_mae
            FROM model_registry m ORDER BY m.trained_at DESC""",
     ).fetchall()
+    mkt_rows = _market_rows(con, None)
+    mkt_30 = [r for r in mkt_rows if r["date"] >= d30]
     _write("performance.json", {
         "generated_at": db.utcnow(),
         "projection": {
@@ -171,6 +256,12 @@ def export_performance(con) -> None:
             "lifetime": _bet_metrics(con, None),
             "t30": _bet_metrics(con, d30),
             "t7": _bet_metrics(con, d7),
+        },
+        "market": {
+            "lifetime": _market_metrics(mkt_rows),
+            "t30": _market_metrics(mkt_30),
+            "cum_pnl": _market_cum_pnl(mkt_rows),
+            "monthly": _market_monthly(mkt_rows),
         },
         "calibration": _calibration(con),
         "daily_mae": [{"date": r["date"], "mae": round(r["mae"], 3), "n": r["n"]} for r in daily],

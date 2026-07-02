@@ -76,6 +76,44 @@ async function main() {
       '<div class="notice">Calibration plot appears once enough picks settle (≥5 per bucket).</div>');
   }
 
+  /* --- Model vs the market: how the model's calls stack up against the K lines --- */
+  const mk = perf.market || {};
+  const ml = mk.lifetime || {};
+  if (!ml.n) {
+    $("#mkt-wrap").innerHTML =
+      '<div class="notice">This section fills in once K lines are entered (lines/manual_lines.csv) and those games settle. It tracks whether the model beats the market: pick record vs every line, and who called the Ks closer.</div>';
+  } else {
+    const m30 = mk.t30 || {};
+    const rec = `${ml.wins}–${ml.losses}${ml.pushes ? "–" + ml.pushes : ""}`;
+    $("#mkt-tiles").innerHTML =
+      tile(rec, "Model pick record", `every line, 1u flat · hit ${fmt(ml.hit_pct, "%")}`) +
+      tile(fmt(ml.units, "u"), "Net units vs market", `ROI ${fmt(ml.roi_pct, "%")}${ml.low_sample ? " · low sample" : ""}`, signCls(ml.units)) +
+      tile(fmt(ml.model_closer_pct, "%"), "Model closer than line", "share of starts, |error| vs the line") +
+      tile(`${fmt(ml.model_mae)} / ${fmt(ml.line_mae)}`, "MAE — model / market", `30d: ${fmt(m30.model_mae)} / ${fmt(m30.line_mae)}`);
+
+    new Chart($("#pnlChart"), {
+      type: "line",
+      data: { labels: (mk.cum_pnl || []).map((d) => d.date.slice(5)),
+        datasets: [{ label: "Cumulative units (model pick on every line)",
+          data: (mk.cum_pnl || []).map((d) => d.units),
+          borderColor: C.grn, backgroundColor: "transparent",
+          tension: 0.25, pointRadius: 0, borderWidth: 2 }] },
+      options: { plugins: { legend: { display: true, labels: { boxWidth: 12 } } },
+        scales: { y: { title: { display: true, text: "units" } } } },
+    });
+
+    new Chart($("#mktMaeChart"), {
+      type: "bar",
+      data: { labels: (mk.monthly || []).map((m) => m.month),
+        datasets: [
+          { label: "Model MAE", data: (mk.monthly || []).map((m) => m.model_mae), backgroundColor: C.acc },
+          { label: "Market line MAE", data: (mk.monthly || []).map((m) => m.line_mae), backgroundColor: C.dim },
+        ] },
+      options: { plugins: { legend: { display: true, labels: { boxWidth: 12 } } },
+        scales: { y: { suggestedMin: 0, title: { display: true, text: "K MAE (lower = closer)" } } } },
+    });
+  }
+
   $("#bets tbody").innerHTML = (recent.bets || []).slice(0, 40).map((b) => `
     <tr><td class="dim">${b.date.slice(5)}</td>
       <td>${esc(b.pitcher || "?")} ${b.side === "over" ? "O" : "U"}${b.line}

@@ -1,13 +1,17 @@
 name: Daily refresh
-# 3 in-season runs (UTC): ~10:10, ~15:10, ~18:40 ET during DST.
-# The 18:40 ET pass catches confirmed lineups for most evening slates.
+# 5 in-season runs at 7:10 AM, 10:10 AM, 1:10 PM, 3:10 PM, 7:10 PM Pacific (PDT = UTC-7).
+# GitHub cron is UTC-only: 14:10, 17:10, 20:10, 22:10, and 02:10 next UTC day.
+# (During PST — Nov–Mar, offseason — these land 1h later local; not worth juggling.)
+# Odds budget: 5 snapshots/day × 2 credits ≈ 310/mo, inside the 500 free tier.
 # Tap "Run workflow" in the GitHub app for an on-demand refresh any time.
 
 on:
   schedule:
-    - cron: "10 14 * * *"
-    - cron: "10 19 * * *"
-    - cron: "40 22 * * *"
+    - cron: "10 14 * * *"   # 7:10 AM PT — overnight results scored, first slate
+    - cron: "10 17 * * *"   # 10:10 AM PT — early lineups
+    - cron: "10 20 * * *"   # 1:10 PM PT — pre-game for East Coast evening slates
+    - cron: "10 22 * * *"   # 3:10 PM PT — confirmed lineups, most games
+    - cron: "10 2 * * *"    # 7:10 PM PT — late/West Coast games
   workflow_dispatch:
 
 concurrency:

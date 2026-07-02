@@ -110,6 +110,36 @@ def fetch_game_lines(con, d) -> int:
     return len(rows)
 
 
+def gameline_snapshot(con, game_pk: int) -> dict | None:
+    """Latest game-line snapshot for site display: median total, O/U odds,
+    and moneylines across books, plus book count and snapshot time."""
+    rows = con.execute(
+        """SELECT line, over_odds, under_odds, home_ml, away_ml, fetched_at FROM game_odds
+           WHERE game_pk=? AND fetched_at=(SELECT MAX(fetched_at) FROM game_odds WHERE game_pk=?)""",
+        (game_pk, game_pk),
+    ).fetchall()
+    if not rows:
+        return None
+
+    def med(vals):
+        # lower-middle median: always a real posted number, never an average
+        s = sorted(v for v in vals if v is not None)
+        return s[(len(s) - 1) // 2] if s else None
+
+    out = {
+        "total": med([r["line"] for r in rows]),
+        "over_odds": med([r["over_odds"] for r in rows]),
+        "under_odds": med([r["under_odds"] for r in rows]),
+        "home_ml": med([r["home_ml"] for r in rows]),
+        "away_ml": med([r["away_ml"] for r in rows]),
+        "books": len(rows),
+        "fetched_at": rows[0]["fetched_at"],
+    }
+    if out["total"] is None and out["home_ml"] is None:
+        return None
+    return out
+
+
 def latest_total_for_game(con, game_pk: int) -> dict | None:
     """Median totals line + favorite info across books, latest snapshot."""
     rows = con.execute(

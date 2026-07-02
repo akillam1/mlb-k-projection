@@ -24,6 +24,28 @@ function rangeBar(p) {
   </div>`;
 }
 
+const fmtML = (v) => (v == null ? "—" : v > 0 ? "+" + v : String(v));
+
+function marketRow(s) {
+  const o = s.odds;
+  if (!o) return "";
+  const homeAb = s.home ? s.team : s.opp;
+  const awayAb = s.home ? s.opp : s.team;
+  const total = o.total != null
+    ? `<span class="mkt-item">Game total <b>${o.total}</b>
+        <span class="dim">o${fmtML(o.over_odds)} u${fmtML(o.under_odds)}</span></span>` : "";
+  const ml = (o.home_ml != null || o.away_ml != null)
+    ? `<span class="mkt-item">ML <b>${esc(homeAb)} ${fmtML(o.home_ml)}</b>
+        <span class="dim">${esc(awayAb)} ${fmtML(o.away_ml)}</span></span>` : "";
+  let asof = "";
+  if (o.fetched_at) {
+    const t = new Date(o.fetched_at);
+    if (!isNaN(t)) asof = " · " + t.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  }
+  return `<div class="mkt">${total}${ml}
+    <span class="mkt-src">${o.books} book${o.books === 1 ? "" : "s"}${asof}</span></div>`;
+}
+
 function edgeRows(edges) {
   const pos = (edges || []).filter((e) => e.ev_per_unit > 0).sort((a, b) => b.score - a.score);
   if (!pos.length) {
@@ -51,11 +73,12 @@ function card(s) {
       </div>
       <div class="pt">${p ? `<div class="num">${p.point.toFixed(1)}</div><div class="lbl">proj K</div>` : ""}</div>
     </div>`;
-  if (!p) return `<div class="card">${head}<div class="noedge">No projection yet (model pending or just-announced starter).</div></div>`;
+  if (!p) return `<div class="card">${head}${marketRow(s)}<div class="noedge">No projection yet (model pending or just-announced starter).</div></div>`;
   return `<div class="card" data-hasedge="${(s.edges || []).some((e) => e.ev_per_unit > 0)}">
     ${head}${rangeBar(p)}
     <div class="badges">${confBadge(p.lineup_confidence, p.lineup_tier)}
       <span class="badge">p10 ${p.p10} · p90 ${p.p90}</span></div>
+    ${marketRow(s)}
     ${edgeRows(s.edges)}
   </div>`;
 }

@@ -16,13 +16,13 @@ small scheduled jobs and host simple websites for free.
 **What you'll have when setup is done:**
 
 - A website like `https://yourname.github.io/mlb-k-projection/` — bookmark it on your phone.
-- It refreshes itself 3 times a day automatically. You never have to touch it.
+- It refreshes itself 5 times a day automatically. You never have to touch it.
 - A 2-minute phone routine (optional): type in today's K lines → the site ranks
   the best bets a couple of minutes later.
 
 ## How it works, in plain words
 
-GitHub's computers wake up three times a day, download fresh MLB stats and
+GitHub's computers wake up five times a day, download fresh MLB stats and
 weather, run the prediction model, and update the website. Once a week they
 re-train the model on everything seen so far. Every prediction is saved before
 games start, and every morning the results get checked against what actually
@@ -33,7 +33,7 @@ flowchart LR
     A["MLB stats + pitch data<br/>(free)"] --> C
     B["Weather<br/>(free)"] --> C
     L["K lines you type in<br/>from your phone"] --> C
-    C["GitHub robots<br/>(3x daily + weekly retrain)"] --> F["The website<br/>(your phones)"]
+    C["GitHub robots<br/>(5x daily + weekly retrain)"] --> F["The website<br/>(your phones)"]
 ```
 
 ---
@@ -210,11 +210,13 @@ workflow.** Five minutes later the site is current.
 
 ## What runs automatically
 
-| When (ET) | What |
+| When (PT / ET) | What |
 |---|---|
-| ~10:10 AM | Morning slate: stats, probables, weather, first projections |
-| ~3:10 PM | Midday refresh |
-| ~6:40 PM | Pre-game refresh — catches most confirmed lineups |
+| ~7:10 AM / 10:10 AM | Morning slate: stats, probables, weather, first projections |
+| ~10:10 AM / 1:10 PM | Late-morning refresh |
+| ~1:10 PM / 4:10 PM | Pre-game for East Coast evening slates |
+| ~3:10 PM / 6:10 PM | Confirmed lineups for most games |
+| ~7:10 PM / 10:10 PM | Late + West Coast games |
 | Overnight Sunday | Re-train model on all data so far |
 | Every morning | Score yesterday: actual Ks vs predictions, settle bets |
 
