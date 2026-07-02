@@ -32,7 +32,7 @@ function marketRow(s) {
   const homeAb = s.home ? s.team : s.opp;
   const awayAb = s.home ? s.opp : s.team;
   const total = o.total != null
-    ? `<span class="mkt-item">Game total <b>${o.total}</b>
+    ? `<span class="mkt-item">Runs O/U <b>${o.total}</b>
         <span class="dim">o${fmtML(o.over_odds)} u${fmtML(o.under_odds)}</span></span>` : "";
   const ml = (o.home_ml != null || o.away_ml != null)
     ? `<span class="mkt-item">ML <b>${esc(homeAb)} ${fmtML(o.home_ml)}</b>

@@ -111,6 +111,8 @@ def fetch_game_lines(con, d) -> int:
                             rec["away_ml"] = o.get("price")
             rows.append(rec)
     db.upsert(con, "game_odds", rows)
+    if rows:
+        db.set_kv(con, f"gamelines_fetched:{util.iso(d)}", db.utcnow())
     return len(rows)
 
 
@@ -200,6 +202,7 @@ def fetch_k_props(con, d) -> int:
                          float(point), int(s["over"]), int(s["under"]), db.utcnow()),
                     )
                     inserted += cur.rowcount
+    db.set_kv(con, f"props_fetched:{date_s}", db.utcnow())
     con.commit()
     for name in sorted(unmatched):
         print(f"[odds] props: no probable starter matched '{name}'")

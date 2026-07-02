@@ -326,6 +326,10 @@ def export_meta(con) -> None:
     budget = con.execute(
         "SELECT remaining FROM api_budget WHERE provider='oddsapi' ORDER BY month DESC LIMIT 1"
     ).fetchone()
+    today_s = util.iso(util.today_et())
+    klines = con.execute(
+        "SELECT COUNT(*) c FROM manual_k_lines WHERE date=?", (today_s,)
+    ).fetchone()
     _write("meta.json", {
         "generated_at": db.utcnow(),
         "model_version": mv["version"] if mv else None,
@@ -333,6 +337,8 @@ def export_meta(con) -> None:
         "model_valid_mae": mv["valid_mae"] if mv else None,
         "data_from": span["lo"], "data_to": span["hi"], "game_log_rows": span["n"],
         "odds_credits_remaining": budget["remaining"] if budget else None,
+        "k_lines_today": klines["c"],
+        "props_fetched_at": db.get_kv(con, f"props_fetched:{today_s}"),
     })
 
 

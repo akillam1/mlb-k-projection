@@ -73,13 +73,21 @@ def cmd_daily(_args) -> None:
             "JOIN games g ON g.game_pk=l.game_pk WHERE g.date>=?", (util.iso(today),))]
         mlb_api.ensure_players(con, pids + bids)
         update_weather_for_date(con, today)
-        # Odds fetches are budget-gated to one snapshot each per day (auto mode
-        # keys off the run's UTC hour; see config). Manual runs can force via
-        # the workflow's odds_mode input -> KPROJ_ODDS_MODE.
+        # Odds fetches are budget-gated to one snapshot each per day. Auto mode:
+        # the first run at/after the window hour that hasn't fetched yet today —
+        # self-heals delayed crons and makes late manual runs "just work".
+        # Manual runs can force via the workflow's odds_mode input -> KPROJ_ODDS_MODE.
         mode, hour = config.ODDS_MODE, datetime.now(timezone.utc).hour
-        if mode in ("both", "gamelines") or (mode == "auto" and hour in config.ODDS_GAMELINE_HOURS_UTC):
+        date_s = util.iso(today)
+
+        def _due(window_hours, kv_key):
+            return hour >= min(window_hours) and not db.get_kv(con, kv_key)
+
+        if mode in ("both", "gamelines") or (
+                mode == "auto" and _due(config.ODDS_GAMELINE_HOURS_UTC, f"gamelines_fetched:{date_s}")):
             fetch_game_lines(con, today)
-        if mode in ("both", "props") or (mode == "auto" and hour in config.ODDS_PROPS_HOURS_UTC):
+        if mode in ("both", "props") or (
+                mode == "auto" and _due(config.ODDS_PROPS_HOURS_UTC, f"props_fetched:{date_s}")):
             fetch_k_props(con, today)
         res = ingest_lines_csv(con)
         for w in res["unmatched"]:
