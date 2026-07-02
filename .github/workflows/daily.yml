@@ -2,17 +2,26 @@ name: Daily refresh
 # 5 in-season runs at 7:10 AM, 10:10 AM, 1:10 PM, 3:10 PM, 7:10 PM Pacific (PDT = UTC-7).
 # GitHub cron is UTC-only: 14:10, 17:10, 20:10, 22:10, and 02:10 next UTC day.
 # (During PST — Nov–Mar, offseason — these land 1h later local; not worth juggling.)
-# Odds budget: 5 snapshots/day × 2 credits ≈ 310/mo, inside the 500 free tier.
-# Tap "Run workflow" in the GitHub app for an on-demand refresh any time.
+# Odds budget (500 free credits/mo): game lines 1x/day at the 7:10 AM run
+# (2 credits) + K props 1x/day at the 10:10 AM run (~1/game ≈ 14) ≈ 495/mo.
+# Other runs still refresh stats/lineups/projections — they just skip odds calls.
+# Tap "Run workflow" in the GitHub app for an on-demand refresh any time
+# (odds_mode input: auto = hour-based, or force gamelines/props/both/off).
 
 on:
   schedule:
-    - cron: "10 14 * * *"   # 7:10 AM PT — overnight results scored, first slate
-    - cron: "10 17 * * *"   # 10:10 AM PT — early lineups
+    - cron: "10 14 * * *"   # 7:10 AM PT — results scored, first slate + game lines
+    - cron: "10 17 * * *"   # 10:10 AM PT — early lineups + K prop lines
     - cron: "10 20 * * *"   # 1:10 PM PT — pre-game for East Coast evening slates
     - cron: "10 22 * * *"   # 3:10 PM PT — confirmed lineups, most games
     - cron: "10 2 * * *"    # 7:10 PM PT — late/West Coast games
   workflow_dispatch:
+    inputs:
+      odds_mode:
+        description: "Odds fetch: auto (hour-based) / both / gamelines / props / off"
+        type: choice
+        default: auto
+        options: [auto, both, gamelines, props, off]
 
 concurrency:
   group: kproj-db
@@ -31,5 +40,6 @@ jobs:
       - name: Run daily cycle
         env:
           ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+          KPROJ_ODDS_MODE: ${{ inputs.odds_mode || 'auto' }}
         run: python -m kproj daily
       - uses: ./.github/actions/save-kproj

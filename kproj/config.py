@@ -10,11 +10,19 @@ SITE_DATA_DIR = Path(os.environ.get("KPROJ_SITE_DATA", ROOT / "docs" / "data"))
 LINES_CSV = Path(os.environ.get("KPROJ_LINES_CSV", ROOT / "lines" / "manual_lines.csv"))
 BALLPARKS_CSV = DATA_DIR / "ballparks.csv"
 
-# --- The Odds API (free tier: game lines only; K props are PARKED — see PARKING_LOT.md)
+# --- The Odds API (free tier covers game lines AND current player props;
+#     only *historical* endpoints require a paid plan)
 ODDS_API_KEY = os.environ.get("ODDS_API_KEY", "")          # empty = skip odds ingestion
 ODDS_API_BASE = "https://api.the-odds-api.com/v4"
 ODDS_MONTHLY_BUDGET = 500                                   # free tier credits/month
 ODDS_BUDGET_FLOOR = 60                                      # stop calling below this remaining
+ODDS_PROPS_MARKET = "pitcher_strikeouts"
+# Credit budget: props cost 1/event (~14 games/day ≈ 430/mo); game lines cost 2/call.
+# So each fetch runs once daily, gated by UTC hour of the workflow run (auto mode).
+# Windows are 2h wide to survive GitHub cron delays. 14 UTC = 7 AM PDT, 17 UTC = 10 AM PDT.
+ODDS_MODE = os.environ.get("KPROJ_ODDS_MODE", "auto")       # auto|both|gamelines|props|off
+ODDS_GAMELINE_HOURS_UTC = {int(h) for h in os.environ.get("KPROJ_GAMELINE_HOURS_UTC", "14,15").split(",")}
+ODDS_PROPS_HOURS_UTC = {int(h) for h in os.environ.get("KPROJ_PROPS_HOURS_UTC", "17,18").split(",")}
 
 # --- Open-Meteo (free, non-commercial personal use)
 OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"

@@ -5,19 +5,20 @@ justify revisiting it and what to do then.
 
 ## Costs money — parked
 
-### 1. The Odds API "20K" plan — automated K prop lines (~$59/mo, verify current pricing)
-The big one. The roadmap called this "non-negotiable" for a public product; for
-personal use, manual line entry replaces it at $0.
-- **What you'd get:** automatic pitcher_strikeouts (+ alternate lines) from
-  DK/FD/MGM/Caesars every refresh, automatic closing lines (real CLV on every
-  bet), no typing.
-- **Re-enable:** add the paid key as the `ODDS_API_KEY` secret, then extend
-  `kproj/ingest/odds.py` to request `pitcher_strikeouts` via the event-odds
-  endpoint and write rows into `manual_k_lines` (or a new `book_k_lines` table)
-  — the scoring pipeline downstream is already line-source-agnostic.
-- **Watch:** per-market billing burns credits fast; poll caps and the
-  `x-requests-remaining` guard are already in the code. Cheaper alternatives to
-  evaluate first: OddsBlaze, SportsGameOdds.
+### 1. ~~The Odds API paid plan for K props~~ — UN-PARKED July 2, 2026
+It turned out current-day player props (incl. `pitcher_strikeouts`) ARE on the
+free tier — only *historical* endpoints require a paid plan. `fetch_k_props` in
+`kproj/ingest/odds.py` now pulls one props snapshot daily (~1 credit/game via
+the per-event endpoint) into `manual_k_lines`; manual CSV entry remains as an
+override/fallback.
+
+What a paid plan (~$59/mo, verify pricing) would still add:
+- **Multiple snapshots/day + true closing lines** (real CLV on every bet):
+  the 500-credit free budget only affords ~1 props pass/day (~430/mo) plus one
+  game-lines pass (~60/mo).
+- **Alternate K lines** (`pitcher_strikeouts_alternate`) — more credits/event.
+- **Trigger to revisit:** wanting real CLV tracking or fresher evening lines.
+  Cheaper alternatives to evaluate first: OddsBlaze, SportsGameOdds.
 
 ### 2. Open-Meteo commercial plan (~€29/mo)
 Only required if the site becomes commercial (ads, subscriptions, affiliate

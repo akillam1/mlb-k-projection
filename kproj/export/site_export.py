@@ -61,6 +61,7 @@ def export_today(con, d) -> None:
             "temp_f": r["temp_f"],
             "wind_mph": r["wind_mph"],
             "odds": odds_cache[pk],
+            "k_line": _k_line_summary(con, date_s, r["pitcher_id"]),
         }
         if r["proj_id"]:
             tier = "?"
@@ -79,6 +80,19 @@ def export_today(con, d) -> None:
             })
         starters.append(entry)
     _write("today.json", {"date": date_s, "generated_at": db.utcnow(), "starters": starters})
+
+
+def _k_line_summary(con, date_s: str, pitcher_id: int) -> dict | None:
+    """Median K line across books (freshest row per book), for card display."""
+    rows = con.execute(
+        """SELECT book, line, MAX(entered_at) FROM manual_k_lines
+           WHERE date=? AND pitcher_id=? AND is_closing=0 GROUP BY book""",
+        (date_s, pitcher_id),
+    ).fetchall()
+    lines = sorted(r["line"] for r in rows if r["line"] is not None)
+    if not lines:
+        return None
+    return {"line": lines[(len(lines) - 1) // 2], "books": len(lines)}
 
 
 def _edges_for(con, game_pk: int, pitcher_id: int) -> list:

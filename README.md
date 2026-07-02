@@ -17,8 +17,9 @@ small scheduled jobs and host simple websites for free.
 
 - A website like `https://yourname.github.io/mlb-k-projection/` — bookmark it on your phone.
 - It refreshes itself 5 times a day automatically. You never have to touch it.
-- A 2-minute phone routine (optional): type in today's K lines → the site ranks
-  the best bets a couple of minutes later.
+- K prop lines pull automatically from the books once a day. You can still
+  type lines in from your phone (manual_lines.csv) to add books, update stale
+  lines, or record closing lines — the site rescores a couple of minutes later.
 
 ## How it works, in plain words
 
@@ -32,7 +33,7 @@ happened — wins, losses, and all. None of it runs on your computer.
 flowchart LR
     A["MLB stats + pitch data<br/>(free)"] --> C
     B["Weather<br/>(free)"] --> C
-    L["K lines you type in<br/>from your phone"] --> C
+    L["K prop lines (auto-pulled)<br/>+ any you type in"] --> C
     C["GitHub robots<br/>(5x daily + weekly retrain)"] --> F["The website<br/>(your phones)"]
 ```
 
@@ -123,10 +124,11 @@ its top level (redo Part 2, see "Fixing a bad first publish"). Pages asking you
 to upgrade → the repo got published private (repo **Settings → General →
 Danger Zone → Change visibility → Public**, then retry).
 
-## Part 4 — (Optional but recommended) free Vegas-totals feed
+## Part 4 — (Optional but recommended) free Vegas odds feed
 
-The model uses each game's Vegas run total as a clue for how long starters stay
-in. Free, 2 minutes:
+One free key powers two things: game run totals (a clue for how long starters
+stay in) and daily pitcher K prop lines (what the edge-finder bets against).
+Free, 2 minutes:
 
 1. Go to **the-odds-api.com** → get a free API key (500 requests/month tier).
    The key arrives by email.
@@ -188,7 +190,9 @@ where the robots live; a "workflow" is one robot task.
 
 ## Entering K lines from your phone (~2 min, optional)
 
-This is how the site knows what bets are available. Full guide with examples:
+K prop lines arrive automatically each morning (~10:10 AM PT). Manual entry is
+for overriding stale lines, adding a book the feed missed, or recording closing
+lines for CLV. Full guide with examples:
 [lines/README.md](lines/README.md). Short version:
 
 1. Install the **GitHub** mobile app, sign in.
@@ -212,8 +216,8 @@ workflow.** Five minutes later the site is current.
 
 | When (PT / ET) | What |
 |---|---|
-| ~7:10 AM / 10:10 AM | Morning slate: stats, probables, weather, first projections |
-| ~10:10 AM / 1:10 PM | Late-morning refresh |
+| ~7:10 AM / 10:10 AM | Morning slate: stats, probables, weather, first projections + game odds |
+| ~10:10 AM / 1:10 PM | Late-morning refresh + K prop lines from the books |
 | ~1:10 PM / 4:10 PM | Pre-game for East Coast evening slates |
 | ~3:10 PM / 6:10 PM | Confirmed lineups for most games |
 | ~7:10 PM / 10:10 PM | Late + West Coast games |
@@ -245,8 +249,8 @@ workflow.** Five minutes later the site is current.
 |---|---|
 | Website, automation, database | $0 — GitHub free tier |
 | MLB stats, pitch data, weather | $0 — free public APIs |
-| Vegas game totals | $0 — The Odds API free tier (~120 of 500 monthly credits) |
-| Automatic K-prop lines | **Parked** — needs a $59/mo plan; manual entry replaces it. See [PARKING_LOT.md](PARKING_LOT.md) |
+| Vegas game totals + daily K-prop lines | $0 — The Odds API free tier (~495 of 500 monthly credits; auto-throttles) |
+| Extra prop snapshots + true closing lines | **Parked** — needs a paid plan. See [PARKING_LOT.md](PARKING_LOT.md) |
 
 Keep it non-commercial (no ads or affiliate links) — that's what keeps the
 weather data license and everything else free and simple.

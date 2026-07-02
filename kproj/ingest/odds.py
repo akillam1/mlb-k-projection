@@ -1,8 +1,12 @@
-"""The Odds API — FREE TIER ONLY (game totals + moneylines, ~2 credits/call).
+"""The Odds API — free tier (500 credits/mo).
 
-Pitcher K props require the paid plan and are PARKED (see PARKING_LOT.md).
-Game totals feed the expected-batters-faced feature; that's all we use here.
-Budget guard: stops calling when monthly credits run low.
+Two fetches, both budget-guarded:
+- Game totals + moneylines (~2 credits/call): feeds the expected-BF feature
+  and the odds strip on today's board.
+- Pitcher K props (1 credit per game via the per-event endpoint): current-day
+  props ARE on the free tier (only historical endpoints are paid). Rows land in
+  manual_k_lines exactly like phone-entered lines — scoring downstream is
+  source-agnostic. manual_lines.csv remains as an override/fallback.
 """
 from datetime import datetime, timezone
 
@@ -108,6 +112,99 @@ def fetch_game_lines(con, d) -> int:
             rows.append(rec)
     db.upsert(con, "game_odds", rows)
     return len(rows)
+
+
+def fetch_k_props(con, d) -> int:
+    """One snapshot of pitcher K prop lines for today's not-yet-started games.
+
+    Uses the per-event odds endpoint (cost: 1 market x 1 region = 1 credit per
+    game). Lines are inserted into manual_k_lines keyed exactly like manual
+    entries; INSERT OR IGNORE dedupes unchanged lines across re-runs.
+    """
+    if not config.ODDS_API_KEY:
+        return 0
+    if not budget_ok(con):
+        print("[odds] monthly free-tier budget low — skipping K props")
+        return 0
+    date_s = d if isinstance(d, str) else util.iso(d)
+    try:  # events list is free (does not count against the quota)
+        r = requests.get(
+            f"{config.ODDS_API_BASE}/sports/baseball_mlb/events",
+            params={"apiKey": config.ODDS_API_KEY, "dateFormat": "iso"},
+            timeout=config.REQUEST_TIMEOUT,
+        )
+        r.raise_for_status()
+    except requests.RequestException as e:
+        print(f"[odds] events fetch failed: {e}")
+        return 0
+
+    games = {
+        (g["date"], g["home_team"]): g["game_pk"]
+        for g in con.execute("SELECT game_pk, date, home_team FROM games WHERE date=?", (date_s,))
+    }
+    probables = con.execute(
+        """SELECT ps.pitcher_id, ps.pitcher_name FROM probable_starters ps
+           JOIN games g ON g.game_pk = ps.game_pk WHERE g.date = ?""",
+        (date_s,),
+    ).fetchall()
+    now_iso = db.utcnow()
+    inserted, unmatched = 0, set()
+    for ev in r.json():
+        home = FULL_TO_ABBR.get(ev.get("home_team", ""))
+        ev_date = (ev.get("commence_time") or "")[:10]
+        if not (games.get((ev_date, home)) or games.get((date_s, home))):
+            continue  # not on today's ET slate
+        if (ev.get("commence_time") or "") <= now_iso:
+            continue  # already started; books pull pre-game props
+        if not budget_ok(con):
+            print("[odds] budget floor hit mid-props — stopping")
+            break
+        try:
+            er = requests.get(
+                f"{config.ODDS_API_BASE}/sports/baseball_mlb/events/{ev['id']}/odds",
+                params={
+                    "apiKey": config.ODDS_API_KEY,
+                    "regions": "us",
+                    "markets": config.ODDS_PROPS_MARKET,
+                    "oddsFormat": "american",
+                    "dateFormat": "iso",
+                },
+                timeout=config.REQUEST_TIMEOUT,
+            )
+            er.raise_for_status()
+        except requests.RequestException as e:
+            print(f"[odds] props fetch failed ({ev.get('home_team', '?')}): {e}")
+            continue
+        _record_budget(con, er.headers)
+        for bm in er.json().get("bookmakers", []):
+            for mkt in bm.get("markets", []):
+                if mkt.get("key") != config.ODDS_PROPS_MARKET:
+                    continue
+                sides: dict = {}
+                for o in mkt.get("outcomes", []):
+                    key = (o.get("description") or "", o.get("point"))
+                    sides.setdefault(key, {})[(o.get("name") or "").lower()] = o.get("price")
+                for (pname, point), s in sides.items():
+                    if point is None or s.get("over") is None or s.get("under") is None:
+                        continue
+                    pid = next(
+                        (p["pitcher_id"] for p in probables
+                         if util.name_matches(pname, p["pitcher_name"])), None)
+                    if pid is None:
+                        unmatched.add(pname)
+                    cur = con.execute(
+                        """INSERT OR IGNORE INTO manual_k_lines
+                           (date, pitcher_raw, pitcher_id, book, line, over_odds, under_odds, is_closing, entered_at)
+                           VALUES (?,?,?,?,?,?,?,0,?)""",
+                        (date_s, pname, pid, bm.get("key", "unknown"),
+                         float(point), int(s["over"]), int(s["under"]), db.utcnow()),
+                    )
+                    inserted += cur.rowcount
+    con.commit()
+    for name in sorted(unmatched):
+        print(f"[odds] props: no probable starter matched '{name}'")
+    print(f"[odds] K props: {inserted} new line rows for {date_s}")
+    return inserted
 
 
 def gameline_snapshot(con, game_pk: int) -> dict | None:

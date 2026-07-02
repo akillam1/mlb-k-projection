@@ -12,7 +12,7 @@ Commands
 """
 import argparse
 import sys
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from . import config, db, util
 
@@ -51,7 +51,7 @@ def cmd_daily(_args) -> None:
     from .export.site_export import export_all
     from .ingest import mlb_api
     from .ingest.manual_lines import ingest_lines_csv
-    from .ingest.odds import fetch_game_lines
+    from .ingest.odds import fetch_game_lines, fetch_k_props
     from .ingest.statcast_ingest import ingest_finals_for_date
     from .ingest.weather import update_weather_for_date
     from .model.predict import project_date
@@ -73,7 +73,14 @@ def cmd_daily(_args) -> None:
             "JOIN games g ON g.game_pk=l.game_pk WHERE g.date>=?", (util.iso(today),))]
         mlb_api.ensure_players(con, pids + bids)
         update_weather_for_date(con, today)
-        fetch_game_lines(con, today)
+        # Odds fetches are budget-gated to one snapshot each per day (auto mode
+        # keys off the run's UTC hour; see config). Manual runs can force via
+        # the workflow's odds_mode input -> KPROJ_ODDS_MODE.
+        mode, hour = config.ODDS_MODE, datetime.now(timezone.utc).hour
+        if mode in ("both", "gamelines") or (mode == "auto" and hour in config.ODDS_GAMELINE_HOURS_UTC):
+            fetch_game_lines(con, today)
+        if mode in ("both", "props") or (mode == "auto" and hour in config.ODDS_PROPS_HOURS_UTC):
+            fetch_k_props(con, today)
         res = ingest_lines_csv(con)
         for w in res["unmatched"]:
             print(f"[lines] warning: {w}")

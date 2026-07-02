@@ -50,8 +50,8 @@ function edgeRows(edges) {
   const pos = (edges || []).filter((e) => e.ev_per_unit > 0).sort((a, b) => b.score - a.score);
   if (!pos.length) {
     return (edges || []).length
-      ? '<div class="noedge">No +EV side vs your entered lines.</div>'
-      : '<div class="noedge">No K lines entered yet — add via lines/manual_lines.csv.</div>';
+      ? '<div class="noedge">No +EV side vs current K lines.</div>'
+      : '<div class="noedge">No K line yet — props pull automatically ~10:10 AM PT (or add via lines/manual_lines.csv).</div>';
   }
   return `<div class="edges">` + pos.map((e) => `
     <div class="edge-row">
@@ -77,7 +77,8 @@ function card(s) {
   return `<div class="card" data-hasedge="${(s.edges || []).some((e) => e.ev_per_unit > 0)}">
     ${head}${rangeBar(p)}
     <div class="badges">${confBadge(p.lineup_confidence, p.lineup_tier)}
-      <span class="badge">p10 ${p.p10} · p90 ${p.p90}</span></div>
+      <span class="badge">p10 ${p.p10} · p90 ${p.p90}</span>
+      ${s.k_line ? `<span class="badge">K line ${s.k_line.line} · ${s.k_line.books} bk</span>` : ""}</div>
     ${marketRow(s)}
     ${edgeRows(s.edges)}
   </div>`;

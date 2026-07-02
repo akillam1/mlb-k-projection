@@ -81,7 +81,7 @@ async function main() {
   const ml = mk.lifetime || {};
   if (!ml.n) {
     $("#mkt-wrap").innerHTML =
-      '<div class="notice">This section fills in once K lines are entered (lines/manual_lines.csv) and those games settle. It tracks whether the model beats the market: pick record vs every line, and who called the Ks closer.</div>';
+      '<div class="notice">K prop lines pull automatically each morning; this section fills in once those games settle. It tracks whether the model beats the market: pick record vs every line, and who called the Ks closer.</div>';
   } else {
     const m30 = mk.t30 || {};
     const rec = `${ml.wins}–${ml.losses}${ml.pushes ? "–" + ml.pushes : ""}`;
