@@ -1,0 +1,76 @@
+name: Recover (rebuild DB + model)
+# One-shot disaster recovery after a data-latest wipe. Rebuilds history season by
+# season (each saved independently, so a timeout can't lose more than one season),
+# then retrains and runs one projection cycle so the site repopulates.
+# Shares the kproj-db concurrency group so it never races the daily job.
+
+on:
+  workflow_dispatch: {}
+
+concurrency:
+  group: kproj-db
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  backfill:
+    strategy:
+      max-parallel: 1        # seasons run strictly one at a time (each restores the
+      fail-fast: false       # previous season's saved DB, adds its own, saves again)
+      matrix:
+        season:
+          - { start: "2022-03-01", end: "2022-11-15" }
+          - { start: "2023-03-01", end: "2023-11-15" }
+          - { start: "2024-03-01", end: "2024-11-15" }
+          - { start: "2025-03-01", end: "2025-11-15" }
+          - { start: "2026-03-01", end: "" }
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-kproj
+        with:
+          need-models: "false"
+      - name: Backfill ${{ matrix.season.start }}
+        run: |
+          if [ -n "${{ matrix.season.end }}" ]; then
+            python -m kproj backfill --start "${{ matrix.season.start }}" --end "${{ matrix.season.end }}"
+          else
+            python -m kproj backfill --start "${{ matrix.season.start }}"
+          fi
+      - name: Weather archive (final season only)
+        if: ${{ matrix.season.end == '' }}
+        run: python -m kproj backfill-weather --years 2022,2026
+      - uses: ./.github/actions/save-kproj
+        with:
+          commit-site: "false"
+
+  retrain:
+    needs: backfill
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-kproj
+      - name: Retrain
+        run: python -m kproj retrain
+      - name: Export
+        run: python -m kproj export
+      - uses: ./.github/actions/save-kproj
+        with:
+          save-models: "true"
+
+  project:
+    needs: retrain
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-kproj
+      - name: Daily cycle (projections with the new model; odds off to save credits)
+        env:
+          KPROJ_ODDS_MODE: "off"
+        run: python -m kproj daily
+      - uses: ./.github/actions/save-kproj
