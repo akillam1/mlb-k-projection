@@ -10,19 +10,35 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Upload DB (+ models) to rolling release
+    - name: Upload DB (+ models) to rolling release (regression-guarded)
       shell: bash
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
-        set -e
+        set -euo pipefail
         gh release view data-latest >/dev/null 2>&1 || \
           gh release create data-latest --title "Rolling data" \
             --notes "Auto-updated SQLite DB + model artifacts. Do not delete." --latest=false
         if [ -f data/kproj.db ]; then
+          BASELINE=0
+          [ -f data/.restore_rows ] && BASELINE="$(cat data/.restore_rows)"
+          CUR="$(python -c "import sqlite3; print(sqlite3.connect('data/kproj.db').execute('SELECT COUNT(*) FROM pitcher_game_logs').fetchone()[0])" 2>/dev/null || echo -1)"
+          if [ "$CUR" -lt 0 ]; then
+            echo "::error::Current DB is unreadable -> refusing to upload."
+            exit 1
+          fi
+          if [ "$CUR" -lt "$BASELINE" ] && [ "${KPROJ_FORCE_SAVE:-0}" != "1" ]; then
+            echo "::error::DB regressed: $CUR < $BASELINE pitcher_game_logs rows since restore."
+            echo "::error::Refusing to overwrite good data with a shrunken DB. If intentional, re-run with KPROJ_FORCE_SAVE=1."
+            exit 1
+          fi
           gzip -c data/kproj.db > kproj.db.gz
           gh release upload data-latest kproj.db.gz --clobber
-          echo "DB uploaded: $(du -h kproj.db.gz | cut -f1)"
+          # Self-rotating 7-day backup (kproj-dow1..7) so any bad state is recoverable.
+          BK="kproj-dow$(date -u +%u).db.gz"
+          cp kproj.db.gz "$BK"
+          gh release upload data-latest "$BK" --clobber
+          echo "DB uploaded: $(du -h kproj.db.gz | cut -f1), $CUR rows (baseline $BASELINE). Rolling backup: $BK"
         fi
         if [ "${{ inputs.save-models }}" = "true" ] && ls models/*.txt >/dev/null 2>&1; then
           tar czf models.tgz models/*.txt

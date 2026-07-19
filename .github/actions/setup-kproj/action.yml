@@ -13,23 +13,36 @@ runs:
         cache: pip
     - shell: bash
       run: pip install -q -r requirements.txt
-    - name: Restore DB + models from rolling release
+    - name: Restore DB + models from rolling release (fail-safe)
       shell: bash
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
-        set -e
+        set -euo pipefail
         mkdir -p data models
-        if gh release download data-latest -p kproj.db.gz -D data --clobber 2>/dev/null; then
-          gunzip -f data/kproj.db.gz
-          echo "DB restored: $(du -h data/kproj.db | cut -f1)"
-        else
-          echo "No rolling DB release yet — starting fresh."
-        fi
-        if [ "${{ inputs.need-models }}" = "true" ]; then
-          if gh release download data-latest -p models.tgz --clobber 2>/dev/null; then
-            tar xzf models.tgz && echo "Models restored."
-          else
-            echo "No model artifacts yet."
+        if gh release view data-latest >/dev/null 2>&1; then
+          echo "Rolling release exists -> DB restore is REQUIRED (never silently start fresh)."
+          if ! gh release download data-latest -p kproj.db.gz -D data --clobber; then
+            echo "::error::data-latest exists but kproj.db.gz failed to download. Aborting so a transient"
+            echo "::error::failure cannot overwrite the good database with an empty one. Just re-run the job."
+            exit 1
           fi
+          gunzip -f data/kproj.db.gz
+          n="$(python -c "import sqlite3; print(sqlite3.connect('data/kproj.db').execute('SELECT COUNT(*) FROM pitcher_game_logs').fetchone()[0])" 2>/dev/null || echo -1)"
+          if [ "$n" -lt 0 ]; then
+            echo "::error::Restored database is unreadable/corrupt -> aborting instead of proceeding on bad data."
+            exit 1
+          fi
+          echo "$n" > data/.restore_rows
+          echo "DB restored: $(du -h data/kproj.db | cut -f1), pitcher_game_logs=$n"
+          if [ "${{ inputs.need-models }}" = "true" ]; then
+            if gh release download data-latest -p models.tgz --clobber 2>/dev/null; then
+              tar xzf models.tgz && echo "Models restored."
+            else
+              echo "::warning::No models.tgz on the release yet (ok if a model has never been trained)."
+            fi
+          fi
+        else
+          echo "No rolling release yet -> genuine fresh start."
+          echo "0" > data/.restore_rows
         fi
