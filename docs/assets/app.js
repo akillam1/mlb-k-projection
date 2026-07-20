@@ -66,6 +66,46 @@ function edgeRows(edges) {
     </div>`).join("") + `</div>`;
 }
 
+/* Slate-wide summary: flatten every +EV edge, rank by probability edge, keep the top N. */
+function topEdges(starters, n = 8) {
+  const rows = [];
+  (starters || []).forEach((s) => (s.edges || []).forEach((e) => {
+    if (e.ev_per_unit > 0) rows.push({ s, e });
+  }));
+  return rows.sort((a, b) => probEdge(b.e) - probEdge(a.e)).slice(0, n);
+}
+
+function summaryTable(starters) {
+  const rows = topEdges(starters, 8);
+  if (!rows.length) {
+    return `<h2 class="sec">Top edges</h2>
+      <div class="notice" style="margin:0 0 16px">No positive-EV edges vs the current K lines.
+      Props pull automatically ~10:10 AM PT.</div>`;
+  }
+  const body = rows.map(({ s, e }) => {
+    const odds = e.odds > 0 ? "+" + e.odds : e.odds;
+    const pick = `${e.side === "over" ? "▲ O" : "▼ U"} ${e.line}`;
+    return `<tr>
+      <td><div class="pn">${esc(s.pitcher)}</div>
+        <div class="pm">${s.home ? "vs" : "@"} ${esc(s.opp)} · ${esc(s.time_et)}</div></td>
+      <td class="pk">${pick}</td>
+      <td class="dim">${esc(e.book)} ${odds}</td>
+      <td>${(e.model_prob * 100).toFixed(0)}%</td>
+      <td class="pos">+${(probEdge(e) * 100).toFixed(1)}</td>
+      <td class="pos">+${(e.ev_per_unit * 100).toFixed(1)}%</td>
+    </tr>`;
+  }).join("");
+  return `<h2 class="sec">Top edges · biggest model vs. book gaps</h2>
+    <div class="summary">
+      <table class="t summary-t">
+        <thead><tr>
+          <th>Pitcher</th><th>Pick</th><th>Book</th><th>Model</th><th>Edge</th><th>EV</th>
+        </tr></thead>
+        <tbody>${body}</tbody>
+      </table>
+    </div>`;
+}
+
 function card(s) {
   const p = s.proj;
   const head = `
@@ -105,6 +145,7 @@ async function main() {
   $("#subtitle").textContent = `${data.date} · updated ${upd.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
   const starters = (data.starters || []).slice()
     .sort((a, b) => bestScore(b) - bestScore(a) || String(a.time_et).localeCompare(b.time_et));
+  $("#summary").innerHTML = summaryTable(starters);
   const render = (filter) => {
     const list = filter === "edges" ? starters.filter((s) => bestScore(s) > 0) : starters;
     $("#board").innerHTML = list.length

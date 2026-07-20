@@ -82,3 +82,13 @@ footer.site { color: var(--dim); font-size: 11.5px; line-height: 1.6; margin-top
 .prose p { margin: 8px 0; } .prose ul { margin: 8px 0 8px 20px; } .prose li { margin: 4px 0; }
 .prose code { background: var(--card2); padding: 1px 5px; border-radius: 4px; font-size: 12.5px; }
 @media (min-width: 640px) { .tiles { grid-template-columns: repeat(4, 1fr); } }
+
+/* Today: slate-wide top-edges summary table */
+.summary { overflow-x: auto; margin-bottom: 16px; -webkit-overflow-scrolling: touch; }
+.summary-t { min-width: 340px; }
+.summary-t td { vertical-align: middle; }
+.summary-t .pn { font-weight: 600; white-space: nowrap; }
+.summary-t .pm { color: var(--dim); font-size: 11px; margin-top: 1px; white-space: nowrap; }
+.summary-t .pk { font-weight: 600; white-space: nowrap; }
+.summary-t td.pos { font-weight: 700; }
+.summary-t th:nth-child(n+4), .summary-t td:nth-child(n+4) { text-align: right; }
