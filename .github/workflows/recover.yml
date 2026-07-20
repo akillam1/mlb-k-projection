@@ -61,6 +61,7 @@ jobs:
       - uses: ./.github/actions/save-kproj
         with:
           save-models: "true"
+          commit-site: "false"
 
   project:
     needs: retrain
