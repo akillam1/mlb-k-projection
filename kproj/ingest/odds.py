@@ -258,3 +258,99 @@ def latest_total_for_game(con, game_pk: int) -> dict | None:
         "home_ml": sorted(hmls)[len(hmls) // 2] if hmls else None,
         "away_ml": sorted(amls)[len(amls) // 2] if amls else None,
     }
+
+
+def refresh_top_props(con, d) -> int:
+    """Targeted afternoon re-pull of K props for the top-N games by model edge
+    (line movement for the Signals page). Costs 1 credit per game, capped at
+    ODDS_PROPS_REFRESH_TOP_N and skipped entirely when the budget floor is near.
+    Only runs after the morning snapshot exists; INSERT OR IGNORE in
+    fetch-per-event below means unchanged lines add no rows."""
+    if not config.ODDS_API_KEY or not budget_ok(con):
+        return 0
+    date_s = d if isinstance(d, str) else util.iso(d)
+    if not db.get_kv(con, f"props_fetched:{date_s}"):
+        return 0                      # nothing to move from yet
+    now_iso = db.utcnow()
+    top = con.execute(
+        """SELECT o.game_pk, MAX(o.model_prob - o.vigfree_prob) edge
+           FROM opportunities o JOIN games g ON g.game_pk = o.game_pk
+           WHERE g.date = ? AND o.is_latest = 1 AND g.first_pitch_utc > ?
+           GROUP BY o.game_pk ORDER BY edge DESC LIMIT ?""",
+        (date_s, now_iso, config.ODDS_PROPS_REFRESH_TOP_N),
+    ).fetchall()
+    pks = {r["game_pk"] for r in top if (r["edge"] or 0) >= 0.03}
+    if not pks:
+        print("[odds] props refresh: no upcoming games with edge >= 3 pts")
+        db.set_kv(con, f"props_refreshed:{date_s}", now_iso)
+        return 0
+    try:  # events list is quota-free
+        r = requests.get(
+            f"{config.ODDS_API_BASE}/sports/baseball_mlb/events",
+            params={"apiKey": config.ODDS_API_KEY, "dateFormat": "iso"},
+            timeout=config.REQUEST_TIMEOUT,
+        )
+        r.raise_for_status()
+    except requests.RequestException as e:
+        print(f"[odds] props refresh events fetch failed: {e}")
+        return 0
+    games = {
+        (g["date"], g["home_team"]): g["game_pk"]
+        for g in con.execute("SELECT game_pk, date, home_team FROM games WHERE date=?", (date_s,))
+    }
+    probables = con.execute(
+        """SELECT ps.pitcher_id, ps.pitcher_name FROM probable_starters ps
+           JOIN games g ON g.game_pk = ps.game_pk WHERE g.date = ?""",
+        (date_s,),
+    ).fetchall()
+    inserted = 0
+    for ev in r.json():
+        home = FULL_TO_ABBR.get(ev.get("home_team", ""))
+        ev_date = (ev.get("commence_time") or "")[:10]
+        pk = games.get((ev_date, home)) or games.get((date_s, home))
+        if pk not in pks or (ev.get("commence_time") or "") <= now_iso:
+            continue
+        if not budget_ok(con):
+            print("[odds] budget floor hit mid-refresh — stopping")
+            break
+        try:
+            er = requests.get(
+                f"{config.ODDS_API_BASE}/sports/baseball_mlb/events/{ev['id']}/odds",
+                params={
+                    "apiKey": config.ODDS_API_KEY, "regions": "us",
+                    "markets": config.ODDS_PROPS_MARKET,
+                    "oddsFormat": "american", "dateFormat": "iso",
+                },
+                timeout=config.REQUEST_TIMEOUT,
+            )
+            er.raise_for_status()
+        except requests.RequestException as e:
+            print(f"[odds] props refresh failed ({ev.get('home_team', '?')}): {e}")
+            continue
+        _record_budget(con, er.headers)
+        for bm in er.json().get("bookmakers", []):
+            for mkt in bm.get("markets", []):
+                if mkt.get("key") != config.ODDS_PROPS_MARKET:
+                    continue
+                sides: dict = {}
+                for o in mkt.get("outcomes", []):
+                    key = (o.get("description") or "", o.get("point"))
+                    sides.setdefault(key, {})[(o.get("name") or "").lower()] = o.get("price")
+                for (pname, point), s in sides.items():
+                    if point is None or s.get("over") is None or s.get("under") is None:
+                        continue
+                    pid = next(
+                        (p["pitcher_id"] for p in probables
+                         if util.name_matches(pname, p["pitcher_name"])), None)
+                    cur = con.execute(
+                        """INSERT OR IGNORE INTO manual_k_lines
+                           (date, pitcher_raw, pitcher_id, book, line, over_odds, under_odds, is_closing, entered_at)
+                           VALUES (?,?,?,?,?,?,?,0,?)""",
+                        (date_s, pname, pid, bm.get("key", "unknown"),
+                         float(point), int(s["over"]), int(s["under"]), db.utcnow()),
+                    )
+                    inserted += cur.rowcount
+    db.set_kv(con, f"props_refreshed:{date_s}", db.utcnow())
+    con.commit()
+    print(f"[odds] props refresh: {inserted} changed line rows across {len(pks)} top-edge games")
+    return inserted

@@ -188,6 +188,17 @@ where the robots live; a "workflow" is one robot task.
 | **¼K (quarter-Kelly)** | Suggested bet size as % of your bankroll, deliberately conservative |
 | **Performance page** | The model's full track record — ROI, hit rate, and whether its confidence matches reality (calibration). If the model is cold, this page will say so |
 
+**Signals tab:** answers "should I actually bet this, and now?" Each starter
+gets a pick window — GO (edge ≥5 pts, lineups posted, fresh un-moved line),
+CAUTION (something to verify first), WAIT (no edge/no line), OFF (started or
+scratched) — with the reasons spelled out. Cards compare our number vs the
+book line (with movement since open) vs FanGraphs, and show any tracked
+capper's pick with an agree/disagree call. Below that: a scorecard of each
+capper's parsed-pick record settled against boxscores, and their latest posts.
+Tracked accounts: @KSplitAnalytics, @WiningPlaybook, @HausOfPicks, @IIPatll,
+@AlexCaruso (edit SIGNALS_CAPPERS in kproj/config.py to change). Missed picks
+can be added from your phone via lines/capper_picks.csv.
+
 ## Entering K lines from your phone (~2 min, optional)
 
 K prop lines arrive automatically each morning (~10:10 AM PT). Manual entry is
@@ -225,6 +236,14 @@ workflow.** Five minutes later the site is current.
 | Every morning | Score yesterday: actual Ks vs predictions, settle bets |
 
 ---
+
+**Hourly signals (7:25 AM – 9:25 PM PT):** the Signals tab's feed. Scrapes the
+tracked X capper accounts through public mirrors (best-effort — X blocks free
+automated access, so expect gaps; the page shows exactly how fresh each source
+is), pulls live lineup/scratch status from the official MLB Stats API, grabs
+FanGraphs' free projections once a day for an independent second opinion, and
+settles capper picks against final boxscores. Costs nothing and never touches
+the main database.
 
 # If something looks wrong
 

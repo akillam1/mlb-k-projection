@@ -89,6 +89,10 @@ def cmd_daily(_args) -> None:
         if mode in ("both", "props") or (
                 mode == "auto" and _due(config.ODDS_PROPS_HOURS_UTC, f"props_fetched:{date_s}")):
             fetch_k_props(con, today)
+        # Targeted line-movement refresh: top-edge games only, near first pitch.
+        if mode == "auto" and _due(config.ODDS_PROPS_REFRESH_HOURS_UTC, f"props_refreshed:{date_s}"):
+            from .ingest.odds import refresh_top_props
+            refresh_top_props(con, today)
         res = ingest_lines_csv(con)
         for w in res["unmatched"]:
             print(f"[lines] warning: {w}")
@@ -121,6 +125,21 @@ def cmd_retrain(args) -> None:
         out = train(con, quick=args.quick)
     if out:
         print(f"[retrain] active model: {out['version']} (valid MAE {out['mae']:.3f})")
+
+
+def cmd_signals(_args) -> None:
+    """Hourly best-effort cycle. Never touches kproj.db — see kproj/signals/."""
+    from .signals import export as sig_export
+    from .signals import fg, gameday, settle, social, store
+
+    with store.session() as con:
+        probables = gameday.refresh(con)
+        social.scrape(con, probables)
+        social.ingest_manual_csv(con, probables)
+        fg.refresh(con)
+        settle.settle(con)
+        sig_export.export(con)
+    print("[signals] done")
 
 
 def cmd_export(_args) -> None:
@@ -159,6 +178,7 @@ def main(argv=None) -> int:
     wp = sub.add_parser("backfill-weather")
     wp.add_argument("--years", required=True, help="e.g. 2022,2026")
     sub.add_parser("daily")
+    sub.add_parser("signals")
     sub.add_parser("rescore")
     rt = sub.add_parser("retrain")
     rt.add_argument("--quick", action="store_true")
@@ -167,7 +187,7 @@ def main(argv=None) -> int:
     args = p.parse_args(argv)
     {
         "init": cmd_init, "backfill": cmd_backfill, "backfill-weather": cmd_backfill_weather,
-        "daily": cmd_daily, "rescore": cmd_rescore, "retrain": cmd_retrain,
+        "daily": cmd_daily, "signals": cmd_signals, "rescore": cmd_rescore, "retrain": cmd_retrain,
         "export": cmd_export, "status": cmd_status,
     }[args.cmd](args)
     return 0

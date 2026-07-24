@@ -20,6 +20,14 @@ What a paid plan (~$59/mo, verify pricing) would still add:
 - **Trigger to revisit:** wanting real CLV tracking or fresher evening lines.
   Cheaper alternatives to evaluate first: OddsBlaze, SportsGameOdds.
 
+### 1b. X (Twitter) API for reliable capper scraping (~$200/mo)
+Added July 24, 2026. The Signals tab tracks five capper accounts, but X blocks
+anonymous scraping (login wall + datacenter-IP blocks) and the free API tier has
+no read access. Current approach: best-effort public Nitter-style mirrors, which
+die often, plus the lines/capper_picks.csv manual fallback. If mirror coverage
+gets unbearable, the Basic API tier ($200/mo, 10k reads) would make it reliable
+— parked as flagrantly violating the zero-dollar rule.
+
 ### 2. Open-Meteo commercial plan (~€29/mo)
 Only required if the site becomes commercial (ads, subscriptions, affiliate
 links). Personal hobby use is squarely within the free non-commercial tier.

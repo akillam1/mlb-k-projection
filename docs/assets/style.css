@@ -92,3 +92,34 @@ footer.site { color: var(--dim); font-size: 11.5px; line-height: 1.6; margin-top
 .summary-t .pk { font-weight: 600; white-space: nowrap; }
 .summary-t td.pos { font-weight: 700; }
 .summary-t th:nth-child(n+4), .summary-t td:nth-child(n+4) { text-align: right; }
+
+/* Signals page */
+.win { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 6px;
+  letter-spacing: .5px; text-transform: uppercase; }
+.win-go { color: #0d1117; background: var(--green); }
+.win-caution { color: #0d1117; background: var(--gold); }
+.win-wait { color: var(--dim); background: var(--card2); border: 1px solid var(--line); }
+.win-off { color: var(--red); background: var(--card2); border: 1px solid var(--red); }
+.reasons { color: var(--dim); font-size: 12px; margin-top: 7px; line-height: 1.5; }
+.cmp { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 9px; padding-top: 8px;
+  border-top: 1px dashed var(--line); font-size: 13px; }
+.cmp .lbl { color: var(--dim); font-size: 10.5px; text-transform: uppercase; letter-spacing: .5px; display: block; }
+.cmp b { font-size: 15px; }
+.move-up { color: var(--red); } .move-dn { color: var(--green); }
+.pickrow { display: flex; justify-content: space-between; gap: 8px; align-items: center;
+  padding: 5px 0; font-size: 13px; }
+.pick-agree { color: var(--green); } .pick-disagree { color: var(--red); }
+.srcbar { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.src { font-size: 11px; padding: 4px 9px; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--card); color: var(--dim); }
+.src.ok { border-color: var(--green); color: var(--green); }
+.src.stale { border-color: var(--gold); color: var(--gold); }
+.src.down { border-color: var(--red); color: var(--red); }
+.post { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+  padding: 9px 12px; margin-bottom: 7px; font-size: 13px; line-height: 1.5; }
+.post .hdr { display: flex; gap: 8px; align-items: baseline; margin-bottom: 3px; }
+.post .cap { font-weight: 600; }
+.post .when { color: var(--dim); font-size: 11px; }
+.post .parsed { margin-left: auto; font-size: 10.5px; color: var(--green); }
+.post .txt { color: var(--dim); word-break: break-word; }
+.post a { color: var(--accent); text-decoration: none; }

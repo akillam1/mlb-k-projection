@@ -83,16 +83,30 @@ def export_today(con, d) -> None:
 
 
 def _k_line_summary(con, date_s: str, pitcher_id: int) -> dict | None:
-    """Median K line across books (freshest row per book), for card display."""
+    """Median K line across books plus open->latest movement for the
+    Signals page (a second targeted snapshot may land near first pitch)."""
     rows = con.execute(
-        """SELECT book, line, MAX(entered_at) FROM manual_k_lines
-           WHERE date=? AND pitcher_id=? AND is_closing=0 GROUP BY book""",
+        """SELECT book,
+                  FIRST_VALUE(line) OVER (PARTITION BY book ORDER BY entered_at)      first_line,
+                  FIRST_VALUE(line) OVER (PARTITION BY book ORDER BY entered_at DESC) last_line,
+                  MAX(entered_at)   OVER () latest_at
+           FROM manual_k_lines
+           WHERE date=? AND pitcher_id=? AND is_closing=0""",
         (date_s, pitcher_id),
     ).fetchall()
-    lines = sorted(r["line"] for r in rows if r["line"] is not None)
-    if not lines:
+    per_book = {r["book"]: r for r in rows}          # one row per book
+    def med(key):
+        vals = sorted(r[key] for r in per_book.values() if r[key] is not None)
+        return vals[(len(vals) - 1) // 2] if vals else None
+    latest, opened = med("last_line"), med("first_line")
+    if latest is None:
         return None
-    return {"line": lines[(len(lines) - 1) // 2], "books": len(lines)}
+    out = {"line": latest, "books": len(per_book),
+           "latest_at": next(iter(per_book.values()))["latest_at"]}
+    if opened is not None and opened != latest:
+        out["open"] = opened
+        out["move"] = round(latest - opened, 1)
+    return out
 
 
 def _edges_for(con, game_pk: int, pitcher_id: int) -> list:

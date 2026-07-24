@@ -1,0 +1,94 @@
+name: Hourly signals
+# Best-effort capper scraping (public X mirrors), MLB lineup/scratch state,
+# FanGraphs comparison (1x/day), capper settlement, and the Signals page JSON.
+# Fully independent of kproj.db: state lives in its own small signals.db
+# release asset, so this can never race or clobber the projection database.
+# ~15 runs/day, all free: StatsAPI + FanGraphs are keyless; NO Odds API calls.
+
+on:
+  schedule:
+    - cron: "25 14-23 * * *"   # 7:25 AM – 4:25 PM PT
+    - cron: "25 0-4 * * *"     # 5:25 PM – 9:25 PM PT
+  workflow_dispatch:
+
+concurrency:
+  group: kproj-signals
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  signals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -q requests
+      - name: Restore signals.db (fail-safe, same rules as kproj.db)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p data
+          echo "0" > data/.signals_rows
+          if ! gh release view data-latest >/dev/null 2>&1; then
+            echo "No rolling release yet -> fresh signals store."
+            exit 0
+          fi
+          ASSETS="$(gh release view data-latest --json assets --jq '.assets[].name' 2>/dev/null || echo __ERR__)"
+          if [ "$ASSETS" = "__ERR__" ]; then
+            echo "::error::Could not read the release asset list. Aborting; re-run the job."
+            exit 1
+          fi
+          if printf '%s\n' "$ASSETS" | grep -qx 'signals.db.gz'; then
+            if ! gh release download data-latest -p signals.db.gz -D data --clobber; then
+              echo "::error::signals.db.gz exists but failed to download. Aborting so we can't clobber capper history."
+              exit 1
+            fi
+            gunzip -f data/signals.db.gz
+            python -c "import sqlite3; print(sqlite3.connect('data/signals.db').execute('SELECT COUNT(*) FROM capper_posts').fetchone()[0])" > data/.signals_rows
+            echo "Restored signals.db ($(cat data/.signals_rows) posts)."
+          else
+            echo "signals.db.gz not on release yet -> fresh signals store."
+          fi
+      - name: Run signals cycle
+        run: python -m kproj signals
+      - name: Save signals.db (regression-guarded)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [ -f data/signals.db ] || { echo "no signals.db produced"; exit 0; }
+          BASELINE="$(cat data/.signals_rows)"
+          CUR="$(python -c "import sqlite3; print(sqlite3.connect('data/signals.db').execute('SELECT COUNT(*) FROM capper_posts').fetchone()[0])" || echo -1)"
+          if [ "$CUR" -lt "$BASELINE" ]; then
+            echo "::error::signals.db regressed ($CUR < $BASELINE posts) -> refusing to upload."
+            exit 1
+          fi
+          gh release view data-latest >/dev/null 2>&1 || \
+            gh release create data-latest --title "Rolling data" \
+              --notes "Auto-updated SQLite DB + model artifacts. Do not delete." --latest=false
+          gzip -c data/signals.db > signals.db.gz
+          gh release upload data-latest signals.db.gz --clobber
+          echo "signals.db uploaded ($CUR posts)."
+      - name: Commit validation.json
+        run: |
+          set -e
+          git config user.name "kproj-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/data/validation.json
+          if git diff --cached --quiet; then
+            echo "No signals changes."
+            exit 0
+          fi
+          git commit -m "signals: refresh $(date -u +'%Y-%m-%dT%H:%MZ') [skip ci]"
+          for i in 1 2 3; do
+            git pull --rebase origin "${GITHUB_REF_NAME}" && git push && exit 0
+            sleep $((i * 5))
+          done
+          echo "::error::Could not push after 3 attempts (daily job racing?). Next hourly run will carry the data."
+          exit 1

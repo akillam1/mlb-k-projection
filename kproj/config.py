@@ -66,3 +66,36 @@ MIN_TRAIN_ROWS = 1500
 SEASON_START_MONTH = 3
 
 ET_ZONE = "America/New_York"
+
+# --- Signals page (validation vs cappers / market / FanGraphs) ---
+# X/Twitter capper accounts tracked on the Signals page. Scraping X itself
+# requires login + paid API, so this is BEST-EFFORT via public Nitter mirrors
+# (rotates through SIGNALS_MIRRORS until one answers). Mirrors die often;
+# lines/capper_picks.csv is the reliable manual fallback (phone-editable).
+SIGNALS_DB = Path(os.environ.get("KPROJ_SIGNALS_DB", DATA_DIR / "signals.db"))
+CAPPER_PICKS_CSV = Path(os.environ.get("KPROJ_CAPPER_CSV", ROOT / "lines" / "capper_picks.csv"))
+SIGNALS_CAPPERS = {
+    # handle (case as used on x.com) -> short display name
+    "KSplitAnalytics": "KSplit",
+    "WiningPlaybook": "WinningPlaybook",
+    "HausOfPicks": "Haus",
+    "IIPatll": "Pat",
+    "AlexCaruso": "AlexCaruso",
+}
+SIGNALS_MIRRORS = [m for m in os.environ.get(
+    "KPROJ_NITTER_MIRRORS",
+    "https://xcancel.com,https://nitter.net,https://nitter.poast.org,"
+    "https://lightbrd.com,https://nitter.privacyredirect.com,https://nitter.tiekoetter.com",
+).split(",") if m]
+SIGNALS_FEED_POSTS = 25              # recent raw posts kept in validation.json
+SIGNALS_EDGE_GO = 0.05               # |prob edge| needed for a GO pick window
+SIGNALS_LINE_STALE_H = 6.0           # K line older than this = CAUTION
+
+# Targeted K-prop refresh (line movement): re-pull props near first pitch for
+# the top-N games by model edge only (1 credit/game; guarded by budget floor).
+ODDS_PROPS_REFRESH_HOURS_UTC = {int(h) for h in os.environ.get("KPROJ_PROPS_REFRESH_HOURS_UTC", "22,23").split(",")}
+ODDS_PROPS_REFRESH_TOP_N = int(os.environ.get("KPROJ_PROPS_REFRESH_TOP_N", "3"))
+
+# FanGraphs Depth Charts rest-of-season projections (free JSON; daily pull).
+FG_PROJ_URL = "https://www.fangraphs.com/api/projections"
+FG_PROJ_TYPE = "rfangraphsdc"

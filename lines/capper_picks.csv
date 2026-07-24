@@ -1,0 +1,6 @@
+capper,date,pitcher,side,line,odds,book
+# Manual fallback for capper picks the scraper missed (X blocks free scraping).
+# Edit from your phone via the GitHub app; the hourly job ingests it.
+# capper: handle or any name | date: YYYY-MM-DD (blank = auto from probables)
+# side: over/under | odds/book optional. Example:
+# IIPatll,2026-07-25,Tarik Skubal,under,8.5,-134,DK

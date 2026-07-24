@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>K Board — Signals</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="site">
+    <h1>⚾ K Board</h1>
+    <span class="sub" id="subtitle">loading…</span>
+  </header>
+  <nav class="tabs">
+    <a href="index.html">Today</a>
+    <a href="validation.html" class="active">Signals</a>
+    <a href="performance.html">Performance</a>
+    <a href="methodology.html">Methodology</a>
+  </nav>
+  <div id="sources"></div>
+  <div class="chips">
+    <span class="chip on" data-f="all">All starters</span>
+    <span class="chip" data-f="go">GO windows</span>
+    <span class="chip" data-f="picks">Capper picks</span>
+  </div>
+  <div id="board"></div>
+  <h2 class="sec">Capper scorecard <span class="dim" style="text-transform:none">(picks we could parse, settled vs boxscores, 1u flat)</span></h2>
+  <div id="cappers"></div>
+  <h2 class="sec">Latest posts</h2>
+  <div id="feed"></div>
+  <footer class="site">
+    X accounts are scraped best-effort through public mirrors — X blocks free
+    automated access, so gaps are expected and shown honestly above. Missing a
+    pick? Add it to <code>lines/capper_picks.csv</code> from your phone.
+    Capper records only count picks the parser could read. Model output, not
+    betting advice; if gambling stops being fun: 1-800-GAMBLER.
+  </footer>
+</div>
+<script src="assets/signals.js?v=1"></script>
+</body>
+</html>
