@@ -9,6 +9,15 @@ from ..ingest.odds import gameline_snapshot
 ET = ZoneInfo(config.ET_ZONE)
 
 
+def _book_rank(col: str = "o.book") -> str:
+    """SQL CASE ranking books by config.PREFERRED_BOOKS — used to pick ONE
+    canonical book per pick for performance/validation (DraftKings first,
+    then down the chain). Same bet at six books is one pick, not six."""
+    whens = " ".join(
+        f"WHEN {col}='{b}' THEN {i}" for i, b in enumerate(config.PREFERRED_BOOKS))
+    return f"CASE {whens} ELSE {len(config.PREFERRED_BOOKS)} END"
+
+
 def _write(name: str, payload) -> None:
     config.SITE_DATA_DIR.mkdir(parents=True, exist_ok=True)
     with open(config.SITE_DATA_DIR / name, "w", encoding="utf-8") as f:
@@ -83,29 +92,31 @@ def export_today(con, d) -> None:
 
 
 def _k_line_summary(con, date_s: str, pitcher_id: int) -> dict | None:
-    """Median K line across books plus open->latest movement for the
-    Signals page (a second targeted snapshot may land near first pitch)."""
+    """K line from the canonical book (config.PREFERRED_BOOKS chain) plus its
+    open->latest movement for the Signals page (a second targeted snapshot may
+    land near first pitch). Book count across all books kept for context."""
     rows = con.execute(
         """SELECT book,
                   FIRST_VALUE(line) OVER (PARTITION BY book ORDER BY entered_at)      first_line,
                   FIRST_VALUE(line) OVER (PARTITION BY book ORDER BY entered_at DESC) last_line,
-                  MAX(entered_at)   OVER () latest_at
+                  MAX(entered_at)   OVER (PARTITION BY book) latest_at
            FROM manual_k_lines
            WHERE date=? AND pitcher_id=? AND is_closing=0""",
         (date_s, pitcher_id),
     ).fetchall()
     per_book = {r["book"]: r for r in rows}          # one row per book
-    def med(key):
-        vals = sorted(r[key] for r in per_book.values() if r[key] is not None)
-        return vals[(len(vals) - 1) // 2] if vals else None
-    latest, opened = med("last_line"), med("first_line")
-    if latest is None:
+    if not per_book:
         return None
-    out = {"line": latest, "books": len(per_book),
-           "latest_at": next(iter(per_book.values()))["latest_at"]}
-    if opened is not None and opened != latest:
-        out["open"] = opened
-        out["move"] = round(latest - opened, 1)
+    rank = {b: i for i, b in enumerate(config.PREFERRED_BOOKS)}
+    book = min(per_book, key=lambda b: (rank.get(b, len(rank)), b))
+    r = per_book[book]
+    if r["last_line"] is None:
+        return None
+    out = {"line": r["last_line"], "book": book, "books": len(per_book),
+           "latest_at": r["latest_at"]}
+    if r["first_line"] is not None and r["first_line"] != r["last_line"]:
+        out["open"] = r["first_line"]
+        out["move"] = round(r["last_line"] - r["first_line"], 1)
     return out
 
 
@@ -142,17 +153,25 @@ def _proj_metrics(con, since: str | None) -> dict:
 
 
 def _bet_metrics(con, since: str | None) -> dict:
-    """Betting record over POSITIVE-EV picks only (what the site surfaces)."""
+    """Betting record over POSITIVE-EV picks only (what the site surfaces).
+    ONE canonical book per pick (PREFERRED_BOOKS chain) — the same call
+    settled at six books is one pick, not six."""
     where = "AND b.date >= ?" if since else ""
     args = (since,) if since else ()
     r = con.execute(
         f"""SELECT COUNT(*) n,
-                   SUM(b.pnl_units) units,
-                   AVG(CASE WHEN b.result='win' THEN 1.0 WHEN b.result='loss' THEN 0.0 END)*100 hit,
-                   AVG(b.clv_pct) clv
-            FROM bet_results b
-            JOIN opportunities o ON o.id = b.opportunity_id
-            WHERE o.ev_per_unit > 0 {where}""",
+                   SUM(pnl_units) units,
+                   AVG(CASE WHEN result='win' THEN 1.0 WHEN result='loss' THEN 0.0 END)*100 hit,
+                   AVG(clv_pct) clv
+            FROM (
+              SELECT b.pnl_units, b.result, b.clv_pct,
+                     ROW_NUMBER() OVER (
+                       PARTITION BY b.date, o.game_pk, o.pitcher_id
+                       ORDER BY {_book_rank()}, o.ev_per_unit DESC) rn
+              FROM bet_results b
+              JOIN opportunities o ON o.id = b.opportunity_id
+              WHERE o.ev_per_unit > 0 {where}
+            ) WHERE rn = 1""",
         args,
     ).fetchone()
     n = r["n"] or 0
@@ -169,12 +188,18 @@ def _bet_metrics(con, since: str | None) -> dict:
 
 def _calibration(con) -> list:
     rows = con.execute(
-        """SELECT CAST(b.model_prob*20 AS INT) bucket,
-                  COUNT(*) n, AVG(b.model_prob)*100 pred,
-                  AVG(CASE WHEN b.result='win' THEN 1.0 WHEN b.result='loss' THEN 0.0 END)*100 actual
-           FROM bet_results b
-           JOIN opportunities o ON o.id = b.opportunity_id
-           WHERE o.ev_per_unit > 0 AND b.result IN ('win','loss')
+        f"""SELECT CAST(model_prob*20 AS INT) bucket,
+                  COUNT(*) n, AVG(model_prob)*100 pred,
+                  AVG(CASE WHEN result='win' THEN 1.0 WHEN result='loss' THEN 0.0 END)*100 actual
+           FROM (
+             SELECT b.model_prob, b.result,
+                    ROW_NUMBER() OVER (
+                      PARTITION BY b.date, o.game_pk, o.pitcher_id
+                      ORDER BY {_book_rank()}, o.ev_per_unit DESC) rn
+             FROM bet_results b
+             JOIN opportunities o ON o.id = b.opportunity_id
+             WHERE o.ev_per_unit > 0 AND b.result IN ('win','loss')
+           ) WHERE rn = 1
            GROUP BY bucket HAVING COUNT(*) >= 5 ORDER BY bucket""",
     ).fetchall()
     return [
@@ -184,8 +209,9 @@ def _calibration(con) -> list:
 
 
 def _market_rows(con, since: str | None) -> list:
-    """One row per settled (game, pitcher, book, line): the side the model
-    favored, its result/PnL at 1u flat, plus model point est vs the line."""
+    """ONE row per settled (game, pitcher): the canonical book's line
+    (PREFERRED_BOOKS chain), the side the model favored, its result/PnL at
+    1u flat, plus model point est vs the line."""
     where = "AND b.date >= ?" if since else ""
     args = (since,) if since else ()
     return con.execute(
@@ -194,8 +220,8 @@ def _market_rows(con, since: str | None) -> list:
                      b.odds, b.model_prob, b.actual_k, b.result, b.pnl_units,
                      pr.point_est,
                      ROW_NUMBER() OVER (
-                       PARTITION BY o.game_pk, o.pitcher_id, o.book, o.line
-                       ORDER BY b.model_prob DESC) rn
+                       PARTITION BY o.game_pk, o.pitcher_id
+                       ORDER BY {_book_rank()}, b.model_prob DESC) rn
               FROM bet_results b
               JOIN opportunities o ON o.id = b.opportunity_id
               LEFT JOIN projection_results pr
@@ -322,12 +348,17 @@ def export_recent(con) -> None:
         (since,),
     ).fetchall()
     bets = con.execute(
-        """SELECT b.date, pl.name pitcher, b.side, b.line, b.odds, b.model_prob,
-                  b.result, b.pnl_units, b.clv_pct, o.book
-           FROM bet_results b
-           JOIN opportunities o ON o.id = b.opportunity_id
-           LEFT JOIN players pl ON pl.mlb_id = o.pitcher_id
-           WHERE b.date >= ? AND o.ev_per_unit > 0 ORDER BY b.date DESC""",
+        f"""SELECT * FROM (
+              SELECT b.date, pl.name pitcher, b.side, b.line, b.odds, b.model_prob,
+                     b.result, b.pnl_units, b.clv_pct, o.book,
+                     ROW_NUMBER() OVER (
+                       PARTITION BY b.date, o.game_pk, o.pitcher_id
+                       ORDER BY {_book_rank()}, o.ev_per_unit DESC) rn
+              FROM bet_results b
+              JOIN opportunities o ON o.id = b.opportunity_id
+              LEFT JOIN players pl ON pl.mlb_id = o.pitcher_id
+              WHERE b.date >= ? AND o.ev_per_unit > 0
+            ) WHERE rn = 1 ORDER BY date DESC""",
         (since,),
     ).fetchall()
     _write("recent.json", {

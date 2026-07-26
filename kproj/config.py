@@ -18,10 +18,11 @@ ODDS_MONTHLY_BUDGET = 500                                   # free tier credits/
 ODDS_BUDGET_FLOOR = 60                                      # stop calling below this remaining
 ODDS_PROPS_MARKET = "pitcher_strikeouts"
 # Credit budget: props cost 1/event (~14 games/day ≈ 430/mo); game lines cost 2/call.
-# So each fetch runs once daily, gated by UTC hour of the workflow run (auto mode).
-# Windows are 2h wide to survive GitHub cron delays. 14 UTC = 7 AM PDT, 17 UTC = 10 AM PDT.
+# Both fetch once daily on the MORNING run (17:10 UTC = 10:10 AM AZ), gated by
+# UTC hour (auto mode). Windows are 2h wide to survive GitHub cron delays; the
+# nightly 04:10 UTC model refresh falls outside them, so it makes no odds calls.
 ODDS_MODE = os.environ.get("KPROJ_ODDS_MODE", "auto")       # auto|both|gamelines|props|off
-ODDS_GAMELINE_HOURS_UTC = {int(h) for h in os.environ.get("KPROJ_GAMELINE_HOURS_UTC", "14,15").split(",")}
+ODDS_GAMELINE_HOURS_UTC = {int(h) for h in os.environ.get("KPROJ_GAMELINE_HOURS_UTC", "17,18").split(",")}
 ODDS_PROPS_HOURS_UTC = {int(h) for h in os.environ.get("KPROJ_PROPS_HOURS_UTC", "17,18").split(",")}
 
 # --- Open-Meteo (free, non-commercial personal use)
@@ -55,6 +56,15 @@ K_SUPPORT_MAX = 18                 # CDF support upper bound for P(over) math
 
 # --- Edge scoring (roadmap §6)
 MAJOR_BOOKS = {"draftkings", "fanduel", "betmgm", "caesars"}
+# Canonical book for validation/performance: one row per pick, not one per book.
+# DraftKings first (most consistent K-prop coverage on The Odds API); if it has
+# no line for a pitcher, fall back down the chain so the pick isn't dropped.
+# All books are still ingested and settled — this only picks which single
+# line the Performance/Signals pages score and display.
+PREFERRED_BOOKS = [b for b in os.environ.get(
+    "KPROJ_PREFERRED_BOOKS",
+    "draftkings,fanduel,betmgm,caesars,betrivers,bovada,betonlineag",
+).split(",") if b]
 BOOK_WEIGHT_MAJOR = 1.0
 BOOK_WEIGHT_OTHER = 0.7
 KELLY_FRACTION = 0.25              # quarter-Kelly
@@ -93,6 +103,8 @@ SIGNALS_LINE_STALE_H = 6.0           # K line older than this = CAUTION
 
 # Targeted K-prop refresh (line movement): re-pull props near first pitch for
 # the top-N games by model edge only (1 credit/game; guarded by budget floor).
+# NOTE: with the two-run schedule there is no scheduled run in this window —
+# it fires only on manual "Run workflow" taps during 22-23 UTC (3-4 PM AZ).
 ODDS_PROPS_REFRESH_HOURS_UTC = {int(h) for h in os.environ.get("KPROJ_PROPS_REFRESH_HOURS_UTC", "22,23").split(",")}
 ODDS_PROPS_REFRESH_TOP_N = int(os.environ.get("KPROJ_PROPS_REFRESH_TOP_N", "3"))
 

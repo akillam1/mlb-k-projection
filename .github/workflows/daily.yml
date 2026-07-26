@@ -1,20 +1,21 @@
 name: Daily refresh
-# 5 in-season runs at 7:10 AM, 10:10 AM, 1:10 PM, 3:10 PM, 7:10 PM Pacific (PDT = UTC-7).
-# GitHub cron is UTC-only: 14:10, 17:10, 20:10, 22:10, and 02:10 next UTC day.
-# (During PST — Nov–Mar, offseason — these land 1h later local; not worth juggling.)
-# Odds budget (500 free credits/mo): game lines 1x/day at the 7:10 AM run
-# (2 credits) + K props 1x/day at the 10:10 AM run (~1/game ≈ 14) ≈ 495/mo.
-# Other runs still refresh stats/lineups/projections — they just skip odds calls.
+# Two runs a day (Arizona = UTC-7 year-round, no DST juggling):
+#   04:10 UTC = 9:10 PM AZ  — MAIN model refresh, after most games complete:
+#                             scores the finished slate, retrains features,
+#                             projects the FOLLOWING day. No odds calls.
+#   17:10 UTC = 10:10 AM AZ — morning odds run: game lines (2 credits) +
+#                             K props (~1/game ≈ 14) for today's slate, plus
+#                             late West-coast finals from last night.
+# Odds budget (500 free credits/mo): ~480/mo. West-coast games that end after
+# 9 PM AZ settle on the morning run. The targeted line-movement re-pull
+# (22-23 UTC window) now fires only on manual runs in that window.
 # Tap "Run workflow" in the GitHub app for an on-demand refresh any time
 # (odds_mode input: auto = hour-based, or force gamelines/props/both/off).
 
 on:
   schedule:
-    - cron: "10 14 * * *"   # 7:10 AM PT — results scored, first slate + game lines
-    - cron: "10 17 * * *"   # 10:10 AM PT — early lineups + K prop lines
-    - cron: "10 20 * * *"   # 1:10 PM PT — pre-game for East Coast evening slates
-    - cron: "10 22 * * *"   # 3:10 PM PT — confirmed lineups, most games
-    - cron: "10 2 * * *"    # 7:10 PM PT — late/West Coast games
+    - cron: "10 4 * * *"    # 9:10 PM AZ — main refresh: score finished games, project next day
+    - cron: "10 17 * * *"   # 10:10 AM AZ — odds run: game lines + K props, late finals
   workflow_dispatch:
     inputs:
       odds_mode:

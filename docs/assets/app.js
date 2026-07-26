@@ -49,13 +49,25 @@ function marketRow(s) {
 /* Probability edge: model win % minus vig-free market win %. Primary ranking. */
 const probEdge = (e) => (e.prob_edge != null ? e.prob_edge : (e.model_prob - e.vigfree_prob));
 
+/* One row per pick: the same side+line offered at several books collapses
+   to the single best price (highest EV). Validation pages go further and
+   score only the canonical book — see Methodology. */
+function dedupeEdges(edges) {
+  const best = new Map();
+  (edges || []).forEach((e) => {
+    const k = `${e.side}|${e.line}`;
+    if (!best.has(k) || e.ev_per_unit > best.get(k).ev_per_unit) best.set(k, e);
+  });
+  return [...best.values()];
+}
+
 function edgeRows(edges) {
-  const pos = (edges || []).filter((e) => e.ev_per_unit > 0)
+  const pos = dedupeEdges(edges).filter((e) => e.ev_per_unit > 0)
     .sort((a, b) => probEdge(b) - probEdge(a));
   if (!pos.length) {
     return (edges || []).length
       ? '<div class="noedge">No +EV side vs current K lines.</div>'
-      : '<div class="noedge">No K line yet — props pull automatically ~10:10 AM PT (or add via lines/manual_lines.csv).</div>';
+      : '<div class="noedge">No K line yet — props pull automatically ~10 AM AZ (or add via lines/manual_lines.csv).</div>';
   }
   return `<div class="edges">` + pos.map((e) => `
     <div class="edge-row">
@@ -66,12 +78,14 @@ function edgeRows(edges) {
     </div>`).join("") + `</div>`;
 }
 
-/* Slate-wide summary: flatten every +EV edge, rank by probability edge, keep the top N. */
+/* Slate-wide summary: best +EV edge per starter, ranked by probability edge. */
 function topEdges(starters, n = 8) {
   const rows = [];
-  (starters || []).forEach((s) => (s.edges || []).forEach((e) => {
-    if (e.ev_per_unit > 0) rows.push({ s, e });
-  }));
+  (starters || []).forEach((s) => {
+    const pos = dedupeEdges(s.edges).filter((e) => e.ev_per_unit > 0)
+      .sort((a, b) => probEdge(b) - probEdge(a));
+    if (pos.length) rows.push({ s, e: pos[0] });   // one row per starter
+  });
   return rows.sort((a, b) => probEdge(b.e) - probEdge(a.e)).slice(0, n);
 }
 
@@ -80,7 +94,7 @@ function summaryTable(starters) {
   if (!rows.length) {
     return `<h2 class="sec">Top edges</h2>
       <div class="notice" style="margin:0 0 16px">No positive-EV edges vs the current K lines.
-      Props pull automatically ~10:10 AM PT.</div>`;
+      Props pull automatically ~10 AM AZ.</div>`;
   }
   const body = rows.map(({ s, e }) => {
     const odds = e.odds > 0 ? "+" + e.odds : e.odds;

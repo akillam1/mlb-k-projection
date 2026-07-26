@@ -81,12 +81,12 @@ async function main() {
   const ml = mk.lifetime || {};
   if (!ml.n) {
     $("#mkt-wrap").innerHTML =
-      '<div class="notice">K prop lines pull automatically each morning; this section fills in once those games settle. It tracks whether the model beats the market: pick record vs every line, and who called the Ks closer.</div>';
+      '<div class="notice">K prop lines pull automatically each morning; this section fills in once those games settle. It tracks whether the model beats the market at one canonical book per pick (DraftKings first, then down the chain), and who called the Ks closer.</div>';
   } else {
     const m30 = mk.t30 || {};
     const rec = `${ml.wins}–${ml.losses}${ml.pushes ? "–" + ml.pushes : ""}`;
     $("#mkt-tiles").innerHTML =
-      tile(rec, "Model pick record", `every line, 1u flat · hit ${fmt(ml.hit_pct, "%")}`) +
+      tile(rec, "Model pick record", `one book per pick, 1u flat · hit ${fmt(ml.hit_pct, "%")}`) +
       tile(fmt(ml.units, "u"), "Net units vs market", `ROI ${fmt(ml.roi_pct, "%")}${ml.low_sample ? " · low sample" : ""}`, signCls(ml.units)) +
       tile(fmt(ml.model_closer_pct, "%"), "Model closer than line", "share of starts, |error| vs the line") +
       tile(`${fmt(ml.model_mae)} / ${fmt(ml.line_mae)}`, "MAE — model / market", `30d: ${fmt(m30.model_mae)} / ${fmt(m30.line_mae)}`);
@@ -94,7 +94,7 @@ async function main() {
     new Chart($("#pnlChart"), {
       type: "line",
       data: { labels: (mk.cum_pnl || []).map((d) => d.date.slice(5)),
-        datasets: [{ label: "Cumulative units (model pick on every line)",
+        datasets: [{ label: "Cumulative units (model pick, one book per pick)",
           data: (mk.cum_pnl || []).map((d) => d.units),
           borderColor: C.grn, backgroundColor: "transparent",
           tension: 0.25, pointRadius: 0, borderWidth: 2 }] },

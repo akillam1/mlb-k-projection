@@ -24,11 +24,40 @@
     <h2>What this is</h2>
     <p>A hobby model that projects strikeout totals for every MLB starting pitcher,
     compares them to sportsbook over/under lines, and ranks any positive-expected-value
-    edges. It runs itself: data refreshes several times a day, every projection is
-    logged before games start, and results are reconciled automatically overnight.
-    Nothing is ever deleted or cherry-picked — the
-    <a href="performance.html" style="color:var(--accent)">Performance page</a> is the
-    whole record.</p>
+    edges. It runs itself on a nightly cycle: every evening after most games finish it
+    scores the completed slate and projects the following day, and every morning it
+    pulls the day's betting lines. Every projection is logged before games start and
+    results are reconciled automatically. Nothing is ever deleted or cherry-picked —
+    the <a href="performance.html" style="color:var(--accent)">Performance page</a> is
+    the whole record.</p>
+
+    <h2>The update cycle</h2>
+    <ul>
+      <li><b>9:10 PM AZ — nightly model refresh.</b> Runs after most games are final:
+      ingests the day's box scores, scores every logged projection, settles picks, and
+      projects the <i>following day's</i> probable starters. This is when the board
+      flips to tomorrow.</li>
+      <li><b>10:10 AM AZ — morning odds run.</b> Pulls game totals/moneylines and K
+      prop lines for the day's slate from US books (free-tier credit budget), settles
+      any West-coast games that finished after the nightly run, and rescores edges
+      against the fresh lines.</li>
+      <li><b>Hourly, ~7 AM–9 PM AZ — Signals feed.</b> A lighter job refreshes the
+      Signals tab: capper posts, lineup status, and pick windows.</li>
+      <li><b>Sunday overnight — weekly retrain</b> on every start since 2022.</li>
+      <li><b>Manual:</b> lines typed into <code>lines/manual_lines.csv</code> rescore
+      within a couple of minutes; a "Run workflow" tap in the GitHub app forces a full
+      refresh any time (an afternoon manual run also re-pulls props for the top-edge
+      games to capture line movement).</li>
+    </ul>
+
+    <h2>One pick, one book</h2>
+    <p>The same bet is usually offered at half a dozen books at slightly different
+    prices — for bookkeeping that is <b>one pick, not six</b>. Everything on the
+    Performance and Signals pages is scored against a single <b>canonical book</b> per
+    pick: DraftKings when it has a line (the most consistent coverage in our odds
+    feed), otherwise the next book down a fixed chain (FanDuel, BetMGM, Caesars,
+    BetRivers, Bovada, BetOnline). All books are still ingested and stored — the Today
+    page simply shows the best available price for each pick, tagged with its book.</p>
 
     <h2>The model</h2>
     <p>A LightGBM gradient-boosted tree model with a Poisson objective produces the
@@ -77,16 +106,63 @@
     high win probability at a price that still loses money long-run (heavy vig)
     is not a pick.</p>
 
+    <h2>How to read the Signals tab</h2>
+    <p>Signals is the <i>pre-game</i> validation view: is this pick ready to bet, and
+    does anyone else agree?</p>
+    <ul>
+      <li><b>Pick window:</b> every starter gets a GO / CAUTION / WAIT / OFF state.
+      GO requires a probability edge of at least 5 points, both lineups posted, and a
+      fresh K line. CAUTION and WAIT list exactly what's missing — stale line, lineups
+      not posted, or the line moved against the model. OFF means no line yet or a
+      scratched starter.</li>
+      <li><b>Model / Line / FanGraphs row:</b> three independent per-start K numbers —
+      our projection, the canonical book's line, and FanGraphs Depth Charts converted
+      to a per-start figure. Three arrows pointing the same way is corroboration; the
+      model standing alone is a reason for extra care.</li>
+      <li><b>Capper picks:</b> K-prop picks pulled best-effort from five X accounts
+      (public mirrors go down; <code>lines/capper_picks.csv</code> is the manual
+      fallback). Each pick is tagged "model agrees / disagrees" with our win %.</li>
+      <li><b>Capper scorecard:</b> every parsed capper pick is settled against the
+      official MLB box score at 1u flat — the same rules our own record uses, so the
+      comparison is honest.</li>
+      <li><b>Source health chips:</b> when each feed (props, cappers, FanGraphs,
+      lineups) last succeeded — a quiet card means "no data", not "no edge".</li>
+    </ul>
+
+    <h2>How to read the Performance tab</h2>
+    <p>Performance is the <i>after-the-fact</i> record. Everything on it follows the
+    one-pick-one-book rule.</p>
+    <ul>
+      <li><b>Betting record:</b> all settled positive-EV picks at 1u flat — ROI, hit
+      rate, net units, and closing-line value where a closing line was recorded. The
+      low-sample warning stays up until ~500 settled picks.</li>
+      <li><b>Model vs the market:</b> drops the +EV filter and asks a harder question:
+      on <i>every</i> canonical line, take whichever side the model favored — what's
+      the record and net units, and who called the Ks closer, the model or the book
+      (MAE, with a monthly breakdown)?</li>
+      <li><b>Projection accuracy:</b> MAE and bias of the raw K projections plus
+      p10–p90 coverage (target ≈ 80%) — model quality independent of any betting.</li>
+      <li><b>Calibration:</b> predicted win % vs what actually happened, in buckets.
+      Dots on the diagonal mean the probabilities can be taken at face value.</li>
+      <li><b>Recent picks &amp; model versions:</b> the raw pick log — one line per
+      pick at its canonical book — and each trained model's backtest vs live error.</li>
+    </ul>
+
     <h2>Honest limitations</h2>
     <ul>
-      <li>K prop lines pull automatically once a day from US books (free-tier
-      credit budget); lines that move after the morning snapshot are stale until
-      the next pull or a manual entry overrides them.</li>
+      <li>K prop lines pull once each morning (free-tier credit budget). The targeted
+      line-movement re-pull only fires on manual afternoon runs now, so lines can go
+      stale by evening — the Signals tab shows line freshness for exactly this
+      reason.</li>
+      <li>Most games are final by the 9:10 PM AZ refresh, but late West-coast games
+      settle on the next morning's run.</li>
       <li>CLV is only measured when a closing line is entered manually.</li>
+      <li>Capper tracking is best-effort scraping of public mirrors — gaps happen and
+      are shown as source-health warnings, not silently filled.</li>
       <li>Retractable-roof parks: day-of roof status isn't freely available, so weather
       is attenuated rather than exact.</li>
       <li>Trust the calibration plot and 30-day panel over any single hot streak;
-      below ~500 settled bets the ROI number is mostly luck either way.</li>
+      below ~500 settled picks the ROI number is mostly luck either way.</li>
     </ul>
 
     <h2>Disclaimer</h2>
@@ -96,7 +172,7 @@
   </div>
 
   <footer class="site">Built on free, public data: MLB Stats API, Baseball Savant,
-  Open-Meteo. Stack: SQLite + LightGBM + GitHub Actions + GitHub Pages — total cost $0.</footer>
+  Open-Meteo, FanGraphs. Stack: SQLite + LightGBM + GitHub Actions + GitHub Pages — total cost $0.</footer>
 </div>
 </body>
 </html>

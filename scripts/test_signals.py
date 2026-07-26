@@ -121,7 +121,12 @@ with store.session() as con:
     con.execute("""INSERT INTO gameday (date, game_pk, status, probables_json, as_of)
                    VALUES ('2026-07-20', 777001, 'Final',
                            '{"DET": {"id": 669373, "name": "Tarik Skubal"}}', 'x')""")
-with store.session() as con, mock.patch("kproj.util.http_get", return_value=BOX):
+# Pin "today" so the fixture stays valid forever: with the clock frozen at
+# 2026-07-24 only the 07-20 pick is past-dated; the 07-24 pick stays pending.
+# (Unpinned, this test rots one day after the fixture dates.)
+import datetime as _dt  # noqa: E402
+with store.session() as con, mock.patch("kproj.util.http_get", return_value=BOX), \
+        mock.patch("kproj.util.today_et", return_value=_dt.date(2026, 7, 24)):
     assert settle.settle(con) == 1
     r = con.execute("SELECT * FROM capper_results").fetchone()
     assert r["result"] == "win" and r["actual_k"] == 7      # under 8.5, 7 Ks
