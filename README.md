@@ -16,18 +16,21 @@ small scheduled jobs and host simple websites for free.
 **What you'll have when setup is done:**
 
 - A website like `https://yourname.github.io/mlb-k-projection/` — bookmark it on your phone.
-- It refreshes itself twice a day automatically. You never have to touch it.
+- It refreshes itself five times a day automatically. You never have to touch
+  it — but a ⟳ Refresh button at the top of the site triggers an instant update.
 - K prop lines pull automatically from the books once a day. You can still
   type lines in from your phone (manual_lines.csv) to add books, update stale
   lines, or record closing lines — the site rescores a couple of minutes later.
 
 ## How it works, in plain words
 
-GitHub's computers wake up twice a day. Every night at 9:10 PM Arizona time —
+GitHub's computers wake up five times a day. Every night at 9:10 PM Arizona time —
 after most games have finished — they score the completed slate against what the
 model predicted, then project the FOLLOWING day. Every morning around 10:10 AM
 AZ they pull the day's betting lines from the books and settle any late
-West-coast games from the night before. Once a week they re-train the model on
+West-coast games from the night before. Quick refreshes at 9:10 AM, 1:10 PM,
+and 3:10 PM AZ keep lineups and projections current through the afternoon (the
+3:10 PM run also re-pulls lines on the biggest-edge games). Once a week they re-train the model on
 everything seen so far. Every prediction is saved before games start and every
 result is checked — wins, losses, and all. None of it runs on your computer.
 
@@ -223,14 +226,18 @@ the strongest evidence a model beats the market.
 ## Forcing a refresh
 
 Lineups just posted? **GitHub app → your repo → Actions → Daily refresh → Run
-workflow.** Five minutes later the site is current.
+workflow.** Or simply tap the **⟳ Refresh** button at the top of the site —
+same thing, no GitHub account needed. Five minutes later the site is current.
 
 ## What runs automatically
 
 | When (AZ / ET) | What |
 |---|---|
 | ~9:10 PM / 12:10 AM | Main refresh: score the finished slate, settle picks, project the following day |
+| ~9:10 AM / 12:10 PM | Quick refresh: latest stats, lineups, projections |
 | ~10:10 AM / 1:10 PM | Odds run: game lines + K prop lines from the books, settle late West-coast games |
+| ~1:10 PM / 4:10 PM | Midday refresh: lineups firm up |
+| ~3:10 PM / 6:10 PM | Pre-slate refresh + line-movement re-pull on the top-edge games |
 | Overnight Sunday | Re-train model on all data so far |
 
 ---

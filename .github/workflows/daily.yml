@@ -1,21 +1,33 @@
 name: Daily refresh
-# Two runs a day (Arizona = UTC-7 year-round, no DST juggling):
+# Five runs a day (Arizona = UTC-7 year-round, no DST juggling):
 #   04:10 UTC = 9:10 PM AZ  — MAIN model refresh, after most games complete:
 #                             scores the finished slate, retrains features,
 #                             projects the FOLLOWING day. No odds calls.
-#   17:10 UTC = 10:10 AM AZ — morning odds run: game lines (2 credits) +
-#                             K props (~1/game ≈ 14) for today's slate, plus
-#                             late West-coast finals from last night.
-# Odds budget (500 free credits/mo): ~480/mo. West-coast games that end after
-# 9 PM AZ settle on the morning run. The targeted line-movement re-pull
-# (22-23 UTC window) now fires only on manual runs in that window.
-# Tap "Run workflow" in the GitHub app for an on-demand refresh any time
-# (odds_mode input: auto = hour-based, or force gamelines/props/both/off).
+#   16:10 UTC = 9:10 AM AZ  — morning data refresh: stats, lineups, projections.
+#                             No odds (the fetch windows open at 17 UTC).
+#   17:10 UTC = 10:10 AM AZ — odds run: game lines (2 credits) + K props
+#                             (~1/game ≈ 14) for today's slate, plus late
+#                             West-coast finals from last night.
+#   20:10 UTC = 1:10 PM AZ  — midday refresh as lineups firm up (odds flags
+#                             already set for the day; no new credits).
+#   22:10 UTC = 3:10 PM AZ  — pre-slate refresh. Lands in the 22-23 UTC
+#                             line-movement window, so refresh_top_props
+#                             re-pulls K props for the top-3 edge games
+#                             (~3 credits/day, budget-guarded).
+# Odds budget (500 free credits/mo): ~480 base + ~90 line movement ≈ 570 raw,
+# but every call goes through budget_ok() (kproj/ingest/odds.py), which skips
+# odds once x-requests-remaining nears the floor — late-month the movement
+# re-pull bows out first; projections are never affected.
+# On-demand: "Run workflow" in the GitHub app, or the ⟳ Refresh button on the
+# site (odds_mode input: auto = hour-based, or force gamelines/props/both/off).
 
 on:
   schedule:
     - cron: "10 4 * * *"    # 9:10 PM AZ — main refresh: score finished games, project next day
+    - cron: "10 16 * * *"   # 9:10 AM AZ — morning data refresh
     - cron: "10 17 * * *"   # 10:10 AM AZ — odds run: game lines + K props, late finals
+    - cron: "10 20 * * *"   # 1:10 PM AZ — midday refresh (lineups firm up)
+    - cron: "10 22 * * *"   # 3:10 PM AZ — pre-slate refresh + top-edge line movement
   workflow_dispatch:
     inputs:
       odds_mode:
