@@ -1,40 +1,61 @@
 name: Daily refresh
-# Five runs a day (Arizona = UTC-7 year-round, no DST juggling):
-#   04:10 UTC = 9:10 PM AZ  — MAIN model refresh, after most games complete:
-#                             scores the finished slate, retrains features,
-#                             projects the FOLLOWING day. No odds calls.
-#   16:10 UTC = 9:10 AM AZ  — morning data refresh: stats, lineups, projections.
-#                             No odds (the fetch windows open at 17 UTC).
-#   17:10 UTC = 10:10 AM AZ — odds run: game lines (2 credits) + K props
-#                             (~1/game ≈ 14) for today's slate, plus late
-#                             West-coast finals from last night.
-#   20:10 UTC = 1:10 PM AZ  — midday refresh as lineups firm up (odds flags
-#                             already set for the day; no new credits).
-#   22:10 UTC = 3:10 PM AZ  — pre-slate refresh. Lands in the 22-23 UTC
-#                             line-movement window, so refresh_top_props
-#                             re-pulls K props for the top-3 edge games
-#                             (~3 credits/day, budget-guarded).
-# Odds budget (500 free credits/mo): ~480 base + ~90 line movement ≈ 570 raw,
-# but every call goes through budget_ok() (kproj/ingest/odds.py), which skips
-# odds once x-requests-remaining nears the floor — late-month the movement
-# re-pull bows out first; projections are never affected.
-# On-demand: "Run workflow" in the GitHub app, or the ⟳ Refresh button on the
-# site (odds_mode input: auto = hour-based, or force gamelines/props/both/off).
+run-name: "Daily refresh — ${{ inputs.slot || 'GitHub cron backstop' }}"
+
+# ---------------------------------------------------------------------------
+# TIMING (Arizona = UTC-7 all year, no DST)
+#
+#   8:00 PM AZ / 03:00 UTC — roll the board to TOMORROW, settle tonight's
+#                            finished games. No odds credits spent.
+#   8:00 AM AZ / 15:00 UTC — morning refresh: game lines + K props for today,
+#                            plus any late West-coast finals from last night.
+#   3:00 PM AZ / 22:00 UTC — pre-slate refresh + top-edge line-movement re-pull.
+#
+# HOW THE TIMES ARE ACTUALLY HIT
+# GitHub's hosted cron is best-effort and, on this repo, has run 1h-3.5h late
+# (see the run history — 04:10 UTC crons starting at 06:37). Nothing inside
+# GitHub fixes that, so the three times above are fired by an external
+# Cloudflare Worker (free tier) that calls workflow_dispatch on the minute:
+# infra/cloudflare-worker/. The crons below are a BACKSTOP for a Worker
+# outage — deliberately scheduled just after each target so that, whenever
+# GitHub gets around to them, the board is still correct.
+#
+# The `gate` job drops a backstop run whose data is already fresh (< 2h), so
+# the normal case is: Worker runs the pipeline, backstop no-ops in ~15s. It
+# fails open — only an explicit "fresh" verdict stops the pipeline.
+#
+# Odds budget (500 free credits/mo): game lines 2/day + props ~14/day + the
+# top-edge movement re-pull ~3/day ≈ 19/day ≈ 590 raw, over the free tier. Every
+# call goes through budget_ok() (kproj/ingest/odds.py), which stops spending at
+# ODDS_BUDGET_FLOOR — late in the month the movement re-pull bows out first and
+# projections are never affected.
+# The 19:07 UTC backstop has no Worker counterpart (Cloudflare's free plan
+# caps cron triggers) — it lands early afternoon AZ as a bonus lineup refresh.
+#
+# The board no longer depends on when this runs: util.board_date() rolls the
+# slate at 8 PM AZ regardless of when the job actually starts.
+# ---------------------------------------------------------------------------
 
 on:
   schedule:
-    - cron: "10 4 * * *"    # 9:10 PM AZ — main refresh: score finished games, project next day
-    - cron: "10 16 * * *"   # 9:10 AM AZ — morning data refresh
-    - cron: "10 17 * * *"   # 10:10 AM AZ — odds run: game lines + K props, late finals
-    - cron: "10 20 * * *"   # 1:10 PM AZ — midday refresh (lineups firm up)
-    - cron: "10 22 * * *"   # 3:10 PM AZ — pre-slate refresh + top-edge line movement
+    - cron: "7 3 * * *"     # backstop — 8:07 PM AZ (rollover)
+    - cron: "7 15 * * *"    # backstop — 8:07 AM AZ (odds)
+    - cron: "7 19 * * *"    # backstop — 12:07 PM AZ (lineups; no Worker slot)
+    - cron: "7 22 * * *"    # backstop — 3:07 PM AZ (line movement)
   workflow_dispatch:
     inputs:
+      slot:
+        description: "Label for this run (the Worker passes the slot name)"
+        type: string
+        default: "manual"
       odds_mode:
         description: "Odds fetch: auto (hour-based) / both / gamelines / props / off"
         type: choice
         default: auto
         options: [auto, both, gamelines, props, off]
+      force:
+        description: "Run even if the data is already fresh"
+        type: boolean
+        default: true
 
 concurrency:
   group: kproj-db
@@ -43,8 +64,38 @@ concurrency:
 permissions:
   contents: write
 
+env:
+  FRESH_MINUTES: "120"
+
 jobs:
+  # Cheap guard so a late GitHub backstop doesn't redo work the Worker already
+  # did. Reads the committed meta.json — no API calls, no DB download.
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      run: ${{ steps.check.outputs.run }}
+      age: ${{ steps.check.outputs.age }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            docs/data/meta.json
+            .github/scripts/gate.py
+          sparse-checkout-cone-mode: false
+      - id: check
+        env:
+          EVENT: ${{ github.event_name }}
+          FORCE: ${{ inputs.force }}
+        run: python3 .github/scripts/gate.py
+
   daily:
+    needs: gate
+    # Fail OPEN, matching gate.py: only an explicit 'false' stops the run. If the
+    # gate job itself dies (runner hiccup, timeout), the board still updates.
+    if: always() && needs.gate.outputs.run != 'false'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -54,5 +105,6 @@ jobs:
         env:
           ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
           KPROJ_ODDS_MODE: ${{ inputs.odds_mode || 'auto' }}
+          KPROJ_TRIGGER: ${{ inputs.slot || format('backstop {0}', github.event.schedule) }}
         run: python -m kproj daily
       - uses: ./.github/actions/save-kproj

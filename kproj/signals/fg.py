@@ -8,7 +8,7 @@ from . import store
 
 
 def refresh(con) -> int:
-    date_s = util.iso(util.today_et())
+    date_s = util.iso(util.board_date())      # keyed to the board, not the wall clock
     if store.get_kv(con, f"fg_fetched:{date_s}"):
         return 0
     try:

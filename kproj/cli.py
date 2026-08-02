@@ -46,6 +46,40 @@ def cmd_backfill_weather(args) -> None:
     print("[backfill-weather] complete")
 
 
+# Statuses a game can no longer move out of. 'Final%' is the codebase-wide test
+# for a played game (see mlb_api.final_game_pks); the others will never produce
+# a box score, and must count as settled or one postponement keeps the day
+# "open" forever. NOT included: 'Suspended' — a suspended game resumes under the
+# same game_pk on its original date, so its stats are still coming.
+DONE_STATUSES = ("Final%", "Completed%", "Postponed%", "Cancel%")
+
+
+def _slate_complete(con, d) -> bool:
+    """No game on date d can still change status."""
+    where = " OR ".join("status LIKE ?" for _ in DONE_STATUSES)
+    row = con.execute(
+        f"SELECT COUNT(*) n, SUM(CASE WHEN {where} THEN 1 ELSE 0 END) done "
+        "FROM games WHERE date=?", (*DONE_STATUSES, util.iso(d))).fetchone()
+    return bool(row and row["n"] and row["n"] == row["done"])
+
+
+def _fully_ingested(con, d) -> bool:
+    """Safe to stop re-pulling date d.
+
+    Status alone is not enough: fetch_boxscore swallows HTTP errors and Savant
+    routinely serves an empty CSV for a date it hasn't finished processing, so
+    a day can be all-Final with no rows stored. Latching on that would lose the
+    day permanently — the old five-run schedule papered over it by re-pulling
+    four more times. Require actual game logs for every played game."""
+    if not _slate_complete(con, d):
+        return False
+    row = con.execute(
+        "SELECT (SELECT COUNT(*) FROM games WHERE date=? AND status LIKE 'Final%') played,"
+        "       (SELECT COUNT(DISTINCT game_pk) FROM pitcher_game_logs WHERE date=?) logged",
+        (util.iso(d), util.iso(d))).fetchone()
+    return bool(row and row["played"] and row["played"] == row["logged"])
+
+
 def cmd_daily(_args) -> None:
     from .edge.score import score_date
     from .export.site_export import export_all
@@ -57,11 +91,19 @@ def cmd_daily(_args) -> None:
     from .model.predict import project_date
     from .results.reconcile import reconcile_date
 
-    today, yday = util.today_et(), util.yesterday_et()
+    # The board rolls forward at 8 PM AZ (config.BOARD_ROLLOVER_HOUR), so the
+    # evening run projects TOMORROW and settles the slate that just finished.
+    today, yday = util.board_date(), util.board_prev_date()
     with db.session() as con:
-        print(f"[daily] {today} (yesterday: {yday})")
-        n_fin = ingest_finals_for_date(con, yday)
-        print(f"[daily] ingested {n_fin} finals from {yday}")
+        print(f"[daily] board {today} (settling: {yday}; wall clock ET {util.today_et()})")
+        if db.get_kv(con, f"finals_done:{util.iso(yday)}"):
+            print(f"[daily] {yday} already fully ingested — skipping finals pull")
+        else:
+            n_fin = ingest_finals_for_date(con, yday)
+            print(f"[daily] ingested {n_fin} finals from {yday}")
+            if _fully_ingested(con, yday):
+                db.set_kv(con, f"finals_done:{util.iso(yday)}", 1)
+                print(f"[daily] {yday} fully ingested — will not re-pull")
         reconcile_date(con, yday)
         games = mlb_api.fetch_schedule(con, today, today + timedelta(days=1))
         print(f"[daily] schedule: {len(games)} games today+tomorrow")
@@ -77,11 +119,19 @@ def cmd_daily(_args) -> None:
         # the first run at/after the window hour that hasn't fetched yet today —
         # self-heals delayed crons and makes late manual runs "just work".
         # Manual runs can force via the workflow's odds_mode input -> KPROJ_ODDS_MODE.
-        mode, hour = config.ODDS_MODE, datetime.now(timezone.utc).hour
+        mode = config.ODDS_MODE
+        now_utc = datetime.now(timezone.utc)
         date_s = util.iso(today)
 
         def _due(window_hours, kv_key):
-            return hour >= min(window_hours) and not db.get_kv(con, kv_key)
+            """This board day's window has opened and the fetch hasn't fired."""
+            return (util.window_open(today, min(window_hours), now_utc)
+                    and not db.get_kv(con, kv_key))
+
+        # Whether props already existed BEFORE this run: the movement re-pull is
+        # pointless (and costs credits) seconds after the first snapshot, which
+        # is what happens when a missed morning run pushes both into the 22:00 slot.
+        props_were_fetched = bool(db.get_kv(con, f"props_fetched:{date_s}"))
 
         if mode in ("both", "gamelines") or (
                 mode == "auto" and _due(config.ODDS_GAMELINE_HOURS_UTC, f"gamelines_fetched:{date_s}")):
@@ -90,7 +140,8 @@ def cmd_daily(_args) -> None:
                 mode == "auto" and _due(config.ODDS_PROPS_HOURS_UTC, f"props_fetched:{date_s}")):
             fetch_k_props(con, today)
         # Targeted line-movement refresh: top-edge games only, near first pitch.
-        if mode == "auto" and _due(config.ODDS_PROPS_REFRESH_HOURS_UTC, f"props_refreshed:{date_s}"):
+        if (mode == "auto" and props_were_fetched
+                and _due(config.ODDS_PROPS_REFRESH_HOURS_UTC, f"props_refreshed:{date_s}")):
             from .ingest.odds import refresh_top_props
             refresh_top_props(con, today)
         res = ingest_lines_csv(con)
@@ -107,7 +158,7 @@ def cmd_rescore(_args) -> None:
     from .export.site_export import export_all
     from .ingest.manual_lines import ingest_lines_csv
 
-    today = util.today_et()
+    today = util.board_date()
     with db.session() as con:
         res = ingest_lines_csv(con)
         print(f"[rescore] ingested {res['ingested']} line rows")
@@ -146,7 +197,7 @@ def cmd_export(_args) -> None:
     from .export.site_export import export_all
 
     with db.session() as con:
-        export_all(con, util.iso(util.today_et()))
+        export_all(con, util.iso(util.board_date()))
     print("[export] site JSON refreshed")
 
 

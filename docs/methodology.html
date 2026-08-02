@@ -33,14 +33,23 @@
 
     <h2>The update cycle</h2>
     <ul>
-      <li><b>9:10 PM AZ — nightly model refresh.</b> Runs after most games are final:
+      <li><b>8:00 PM AZ — nightly model refresh.</b> Runs after most games are final:
       ingests the day's box scores, scores every logged projection, settles picks, and
       projects the <i>following day's</i> probable starters. This is when the board
-      flips to tomorrow.</li>
-      <li><b>10:10 AM AZ — morning odds run.</b> Pulls game totals/moneylines and K
+      flips to tomorrow — and it flips because the code says 8 PM, not because of when
+      the job happens to start.</li>
+      <li><b>8:00 AM AZ — morning odds run.</b> Pulls game totals/moneylines and K
       prop lines for the day's slate from US books (free-tier credit budget), settles
       any West-coast games that finished after the nightly run, and rescores edges
       against the fresh lines.</li>
+      <li><b>3:00 PM AZ — pre-slate refresh.</b> Firmed-up lineups, plus a targeted
+      re-pull of K props on the top-edge games to catch line movement.</li>
+      <li><b>Why those times are exact.</b> GitHub's own scheduler is best-effort and
+      was running these jobs one to three hours late, so the board updated at random
+      hours. The three slots are now fired by an external free scheduler; GitHub's
+      crons remain only as a fallback. The header on every page shows the last update
+      and the next one, and flags a slot that is running late instead of quietly
+      showing stale numbers.</li>
       <li><b>Hourly, ~7 AM–9 PM AZ — Signals feed.</b> A lighter job refreshes the
       Signals tab: capper posts, lineup status, and pick windows.</li>
       <li><b>Sunday overnight — weekly retrain</b> on every start since 2022.</li>
@@ -150,12 +159,12 @@
 
     <h2>Honest limitations</h2>
     <ul>
-      <li>K prop lines pull once each morning (free-tier credit budget). The targeted
-      line-movement re-pull only fires on manual afternoon runs now, so lines can go
-      stale by evening — the Signals tab shows line freshness for exactly this
-      reason.</li>
-      <li>Most games are final by the 9:10 PM AZ refresh, but late West-coast games
-      settle on the next morning's run.</li>
+      <li>K prop lines pull once each morning (free-tier credit budget), with a
+      targeted re-pull on the top-edge games at 3:00 PM AZ. Lines can still drift after
+      that — the Signals tab shows line freshness for exactly this reason.</li>
+      <li>Most games are final by the 8:00 PM AZ refresh, but East-coast night games
+      and late West-coast games settle on the next morning's run. That is why a
+      just-flipped evening board shows yesterday's results as partial.</li>
       <li>CLV is only measured when a closing line is entered manually.</li>
       <li>Capper tracking is best-effort scraping of public mirrors — gaps happen and
       are shown as source-health warnings, not silently filled.</li>

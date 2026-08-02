@@ -13,12 +13,16 @@ from . import store
 def refresh(con) -> list:
     """Fetch today+tomorrow schedule. Stores per-game state; returns probables
     [(pitcher_id, name, date, game_pk)] for the pick parser."""
-    today = util.today_et()
+    # Span the wall-clock day AND the board day (+1): between the 8 PM rollover
+    # and local midnight those differ, and tonight's games still need snapshots
+    # for settlement.
+    today = min(util.today_et(), util.board_date())
+    end = max(util.today_et(), util.board_date()) + timedelta(days=1)
     try:
         data = util.http_get(f"{config.MLB_API}/schedule", params={
             "sportId": 1,
             "startDate": util.iso(today),
-            "endDate": util.iso(today + timedelta(days=1)),
+            "endDate": util.iso(end),
             "hydrate": "probablePitcher,lineups",
         })
     except RuntimeError as e:

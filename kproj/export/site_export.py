@@ -1,5 +1,6 @@
 """Export compact JSON for the static GitHub Pages dashboard (roadmap §7)."""
 import json
+import os
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -375,12 +376,14 @@ def export_meta(con) -> None:
     budget = con.execute(
         "SELECT remaining FROM api_budget WHERE provider='oddsapi' ORDER BY month DESC LIMIT 1"
     ).fetchone()
-    today_s = util.iso(util.today_et())
+    today_s = util.iso(util.board_date())
     klines = con.execute(
         "SELECT COUNT(*) c FROM manual_k_lines WHERE date=?", (today_s,)
     ).fetchone()
     _write("meta.json", {
         "generated_at": db.utcnow(),
+        "board_date": today_s,
+        "trigger": os.environ.get("KPROJ_TRIGGER", "") or None,
         "model_version": mv["version"] if mv else None,
         "model_trained_at": mv["trained_at"] if mv else None,
         "model_valid_mae": mv["valid_mae"] if mv else None,

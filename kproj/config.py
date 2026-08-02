@@ -18,12 +18,14 @@ ODDS_MONTHLY_BUDGET = 500                                   # free tier credits/
 ODDS_BUDGET_FLOOR = 60                                      # stop calling below this remaining
 ODDS_PROPS_MARKET = "pitcher_strikeouts"
 # Credit budget: props cost 1/event (~14 games/day ≈ 430/mo); game lines cost 2/call.
-# Both fetch once daily on the MORNING run (17:10 UTC = 10:10 AM AZ), gated by
-# UTC hour (auto mode). Windows are 2h wide to survive GitHub cron delays; the
-# nightly 04:10 UTC model refresh falls outside them, so it makes no odds calls.
+# Both fetch once daily on the 8:00 AM AZ run (15:00 UTC), gated by UTC hour in
+# auto mode. Only the WINDOW FLOOR matters: the first run at/after it that has
+# not fetched today does the pull, so a delayed run still self-heals. The 8:00
+# PM AZ rollover run lands at 03:00 UTC — below the floor — so it never spends
+# credits on a board it just rolled forward.
 ODDS_MODE = os.environ.get("KPROJ_ODDS_MODE", "auto")       # auto|both|gamelines|props|off
-ODDS_GAMELINE_HOURS_UTC = {int(h) for h in os.environ.get("KPROJ_GAMELINE_HOURS_UTC", "17,18").split(",")}
-ODDS_PROPS_HOURS_UTC = {int(h) for h in os.environ.get("KPROJ_PROPS_HOURS_UTC", "17,18").split(",")}
+ODDS_GAMELINE_HOURS_UTC = {int(h) for h in os.environ.get("KPROJ_GAMELINE_HOURS_UTC", "15,16").split(",")}
+ODDS_PROPS_HOURS_UTC = {int(h) for h in os.environ.get("KPROJ_PROPS_HOURS_UTC", "15,16").split(",")}
 
 # --- Open-Meteo (free, non-commercial personal use)
 OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
@@ -77,6 +79,16 @@ SEASON_START_MONTH = 3
 
 ET_ZONE = "America/New_York"
 
+# --- Board clock -------------------------------------------------------------
+# Which slate the site shows. Historically this rode on today_et(): the nightly
+# run happened to fire after midnight ET, so "today" was already tomorrow. That
+# was an accident of scheduling — move the run one hour earlier and the board
+# silently re-projects the finished slate. It is now explicit: the board rolls
+# to the next day at BOARD_ROLLOVER_HOUR, local to BOARD_ZONE (Arizona, UTC-7
+# year-round, no DST). util.board_date() is the single source of truth.
+BOARD_ZONE = os.environ.get("KPROJ_BOARD_ZONE", "America/Phoenix")
+BOARD_ROLLOVER_HOUR = int(os.environ.get("KPROJ_BOARD_ROLLOVER_HOUR", "20"))   # 8 PM AZ
+
 # --- Signals page (validation vs cappers / market / FanGraphs) ---
 # X/Twitter capper accounts tracked on the Signals page. Scraping X itself
 # requires login + paid API, so this is BEST-EFFORT via public Nitter mirrors
@@ -103,8 +115,8 @@ SIGNALS_LINE_STALE_H = 6.0           # K line older than this = CAUTION
 
 # Targeted K-prop refresh (line movement): re-pull props near first pitch for
 # the top-N games by model edge only (1 credit/game; guarded by budget floor).
-# NOTE: with the two-run schedule there is no scheduled run in this window —
-# it fires only on manual "Run workflow" taps during 22-23 UTC (3-4 PM AZ).
+# The 3:00 PM AZ run lands at 22:00 UTC, inside this window, so the movement
+# re-pull happens on schedule.
 ODDS_PROPS_REFRESH_HOURS_UTC = {int(h) for h in os.environ.get("KPROJ_PROPS_REFRESH_HOURS_UTC", "22,23").split(",")}
 ODDS_PROPS_REFRESH_TOP_N = int(os.environ.get("KPROJ_PROPS_REFRESH_TOP_N", "3"))
 

@@ -1,0 +1,16 @@
+name = "kboard-scheduler"
+main = "worker.js"
+compatibility_date = "2026-01-01"
+
+# Arizona is UTC-7 year round, so these never need DST adjustment.
+[triggers]
+crons = [
+  "0 3 * * *",    # 8:00 PM AZ — roll the board to tomorrow
+  "0 15 * * *",   # 8:00 AM AZ — game lines + K props + settle last night
+  "0 22 * * *",   # 3:00 PM AZ — pre-slate refresh + line movement
+]
+
+[vars]
+GH_REPO = "akillam1/mlb-k-projection"
+# Secrets (NOT here — set with `wrangler secret put` or in the dashboard):
+#   GH_TOKEN, PING_KEY

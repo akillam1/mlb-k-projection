@@ -2,7 +2,8 @@
 import re
 import time
 import unicodedata
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
+from datetime import time as dtime
 from zoneinfo import ZoneInfo
 
 import requests
@@ -10,6 +11,7 @@ import requests
 from . import config
 
 ET = ZoneInfo(config.ET_ZONE)
+BOARD_TZ = ZoneInfo(config.BOARD_ZONE)
 
 
 # ---------- HTTP ----------
@@ -41,6 +43,38 @@ def today_et() -> date:
 
 def yesterday_et() -> date:
     return today_et() - timedelta(days=1)
+
+
+def board_date(now: datetime | None = None) -> date:
+    """The slate the site should be showing right now.
+
+    Rolls to the next day at config.BOARD_ROLLOVER_HOUR, local to
+    config.BOARD_ZONE (Arizona: UTC-7 all year). Explicit on purpose — the old
+    behaviour depended on the nightly run landing after midnight ET, which
+    broke the moment the schedule moved earlier. Late runs are safe: at 11 PM
+    AZ the hour is still past the rollover, and after local midnight the date
+    itself has advanced, so both paths agree.
+    """
+    n = (now or datetime.now(BOARD_TZ)).astimezone(BOARD_TZ)
+    d = n.date()
+    return d + timedelta(days=1) if n.hour >= config.BOARD_ROLLOVER_HOUR else d
+
+
+def board_prev_date(now: datetime | None = None) -> date:
+    """The slate to settle/ingest finals for: the one before the live board."""
+    return board_date(now) - timedelta(days=1)
+
+
+def window_open(board_day: date, hour_utc: int, now: datetime | None = None) -> bool:
+    """Has the UTC fetch window for this board day opened?
+
+    Anchored to the board day, not to the bare UTC hour. The board rolls at
+    03:00 UTC, so a run that lands at 00:30 UTC is still working the previous
+    board day — whose window opened at 15:00 UTC the morning before. Comparing
+    hours alone ("is 0 >= 15?") answered no and silently skipped the fetch.
+    """
+    opens = datetime.combine(board_day, dtime(hour_utc), tzinfo=timezone.utc)
+    return (now or datetime.now(timezone.utc)) >= opens
 
 
 def iso(d: date) -> str:

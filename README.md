@@ -16,22 +16,27 @@ small scheduled jobs and host simple websites for free.
 **What you'll have when setup is done:**
 
 - A website like `https://yourname.github.io/mlb-k-projection/` — bookmark it on your phone.
-- It refreshes itself five times a day automatically. You never have to touch
-  it — but a ⟳ Refresh button at the top of the site triggers an instant update.
+- It refreshes itself on a fixed clock: **8:00 PM, 8:00 AM and 3:00 PM Arizona**.
+  The header always says when it last updated and when the next one lands.
 - K prop lines pull automatically from the books once a day. You can still
   type lines in from your phone (manual_lines.csv) to add books, update stale
   lines, or record closing lines — the site rescores a couple of minutes later.
 
 ## How it works, in plain words
 
-GitHub's computers wake up five times a day. Every night at 9:10 PM Arizona time —
-after most games have finished — they score the completed slate against what the
-model predicted, then project the FOLLOWING day. Every morning around 10:10 AM
-AZ they pull the day's betting lines from the books and settle any late
-West-coast games from the night before. Quick refreshes at 9:10 AM, 1:10 PM,
-and 3:10 PM AZ keep lineups and projections current through the afternoon (the
-3:10 PM run also re-pulls lines on the biggest-edge games). Once a week they re-train the model on
-everything seen so far. Every prediction is saved before games start and every
+GitHub's computers wake up on a fixed clock. **8:00 PM Arizona** — after most
+games have finished — they score the completed slate against what the model
+predicted, then flip the board to TOMORROW. **8:00 AM** they pull the day's
+betting lines and K props from the books and settle any late West-coast games.
+**3:00 PM** is the pre-slate refresh: firmed-up lineups plus a line-movement
+re-pull on the biggest-edge games. Once a week they re-train the model on
+everything seen so far.
+
+Those three times are fired by a tiny free Cloudflare Worker
+(`infra/cloudflare-worker/`) rather than by GitHub's own scheduler, which is
+best-effort and on this repo has run **1 to 3.5 hours late**. GitHub's crons are
+kept as a backstop in case the Worker ever stops; a backstop run that finds the
+data already fresh exits in seconds. Every prediction is saved before games start and every
 result is checked — wins, losses, and all. None of it runs on your computer.
 
 ```mermaid
@@ -226,19 +231,28 @@ the strongest evidence a model beats the market.
 ## Forcing a refresh
 
 Lineups just posted? **GitHub app → your repo → Actions → Daily refresh → Run
-workflow.** Or simply tap the **⟳ Refresh** button at the top of the site —
-same thing, no GitHub account needed. Five minutes later the site is current.
+workflow.** Five minutes later the site is current.
+
+The **⟳ Refresh** button on the site does *not* start a run — it re-checks for a
+newer export and loads it, and tells you how old the current one is. (It used to
+need a GitHub token baked into a public file; with no token it just bounced you
+to a GitHub page you had to be signed in to read, which looked broken. Honest
+beats fake.) If you have the Worker deployed with a `PING_KEY`, visiting
+`https://<worker>.workers.dev/run?key=…` starts a run from any browser.
 
 ## What runs automatically
 
-| When (AZ / ET) | What |
+| When (AZ) | What |
 |---|---|
-| ~9:10 PM / 12:10 AM | Main refresh: score the finished slate, settle picks, project the following day |
-| ~9:10 AM / 12:10 PM | Quick refresh: latest stats, lineups, projections |
-| ~10:10 AM / 1:10 PM | Odds run: game lines + K prop lines from the books, settle late West-coast games |
-| ~1:10 PM / 4:10 PM | Midday refresh: lineups firm up |
-| ~3:10 PM / 6:10 PM | Pre-slate refresh + line-movement re-pull on the top-edge games |
+| **8:00 PM** | Score the finished slate, settle picks, **flip the board to tomorrow** |
+| **8:00 AM** | Game lines + K props from the books, settle late West-coast games, fresh projections |
+| ~12:00 PM | Backstop-only bonus run: lineups firm up (GitHub cron, so the time drifts) |
+| **3:00 PM** | Pre-slate refresh + line-movement re-pull on the top-edge games |
 | Overnight Sunday | Re-train model on all data so far |
+
+The board rolls to the next day at 8:00 PM AZ (`KPROJ_BOARD_ROLLOVER_HOUR`) — a
+property of the code, not of when the job happens to start. A run that fires
+late still produces the right day.
 
 ---
 
@@ -259,6 +273,12 @@ the main database.
   shown on the Today page); also remember: most lines genuinely have no edge.
   The workflow log (Actions → latest "Rescore" run) prints a warning naming any
   line it couldn't match.
+- **The site updated at the wrong time** → check the run name in Actions.
+  `8:00 PM AZ · roll to tomorrow` means the Cloudflare Worker fired it on
+  schedule. `GitHub cron backstop` means the Worker did not, and GitHub's own
+  (late, unpredictable) scheduler picked it up — look at the Worker's logs and
+  whether its `GH_TOKEN` has expired. The board still shows the right *day*
+  either way; only the timing slips.
 - **Email from GitHub: "scheduled workflows disabled"** → happens if the repo
   sees no activity for ~60 days (e.g. over the offseason). Click the re-enable
   button in the email or Actions tab. Harmless.
@@ -291,8 +311,18 @@ weather data license and everything else free and simple.
 | `kproj/edge/` | Strips the vig, computes EV and quarter-Kelly, ranks picks |
 | `kproj/results/` | Nightly reconciliation: errors, bet settlement, CLV |
 | `docs/` | The website (static HTML/JS, GitHub Pages) |
-| `.github/workflows/` | The four robots: daily, retrain, backfill, rescore |
-| `scripts/smoke_test.py` | Full pipeline test on fake data — `python scripts/smoke_test.py` |
+| `.github/workflows/` | The robots: daily, hourly signals, retrain, backfill, rescore, recover |
+| `.github/scripts/gate.py` | Skips a backstop run whose data is already fresh |
+| `infra/cloudflare-worker/` | The free external scheduler that fires the three slots on time |
+
+**Offline tests** — no network, no database, all clocks pinned:
+
+| Command | Covers |
+|---|---|
+| `python scripts/test_board_date.py` | Board rollover, odds-window timing, the workflow gate |
+| `node scripts/test_refresh.js` | The site's freshness strip and Refresh button |
+| `python scripts/test_signals.py` | Signals parser, scraper, settlement, export |
+| `python scripts/smoke_test.py` | Full pipeline on fake data |
 
 Run locally (optional, needs Python 3.10+):
 `pip install -r requirements.txt`, then `python -m kproj daily` / `retrain` /
