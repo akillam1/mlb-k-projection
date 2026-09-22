@@ -132,9 +132,7 @@ function lineupNote(conf, tier) {
 const TABLE_COLS = [
   { key: "pitcher", label: "Pitcher", num: false, get: (s) => s.pitcher },
   { key: "proj", label: "Proj K", num: true, get: (s) => (s.proj ? s.proj.point : -1) },
-  { key: "range", label: "p10–p90", num: true, get: (s) => (s.proj ? s.proj.p50 : -1) },
   { key: "line", label: "K line", num: true, get: (s) => (s.k_line ? s.k_line.line : -1) },
-  { key: "pick", label: "Best pick", num: true, get: (s) => bestScore(s) },
 ];
 
 let sortState = { key: "proj", dir: "desc" };
@@ -149,23 +147,30 @@ function sortStarters(list) {
   });
 }
 
-function tableRow(s) {
-  const p = s.proj;
+/* K line column: the current line is always shown (that's the thing Robin
+   actually checks — DK and FD are almost always the same number, so shopping
+   between them isn't the point). When there's a real +EV side, the pick,
+   odds, and EV ride along as subtext underneath — same numbers the old
+   separate "Best pick" column had, just not a whole column of their own. */
+function lineCell(s) {
+  if (!s.k_line) return '<span class="dim">—</span>';
   const pos = dedupeEdges(s.edges).filter((e) => e.ev_per_unit > 0).sort((a, b) => probEdge(b) - probEdge(a));
   const best = pos[0];
-  const lineCell = s.k_line
-    ? `${s.k_line.line} <span class="dim">${esc(s.k_line.book)}</span>`
-    : '<span class="dim">—</span>';
-  const pickCell = best
-    ? `<span class="pick">${best.side === "over" ? "▲O" : "▼U"} ${best.line}</span>
-       <span class="dim"> ${esc(best.book)} ${best.odds > 0 ? "+" + best.odds : best.odds}</span>
-       <div class="dim tsub">+${(probEdge(best) * 100).toFixed(1)} pts · +${(best.ev_per_unit * 100).toFixed(1)}% EV</div>`
-    : '<span class="dim">—</span>';
+  let html = `<span class="kline-num">${s.k_line.line}</span> <span class="dim">${esc(s.k_line.book)}</span>`;
+  if (best) {
+    html += `<div class="tsub"><span class="pick">${best.side === "over" ? "▲O" : "▼U"}</span>
+      <span class="dim">${best.odds > 0 ? "+" + best.odds : best.odds} · +${(best.ev_per_unit * 100).toFixed(1)}% EV</span></div>`;
+  }
+  return html;
+}
+
+function tableRow(s) {
+  const p = s.proj;
   const meta = `${esc(s.team)} ${s.home ? "vs" : "@"} ${esc(s.opp)} · ${esc(s.time_et)}`;
   if (!p) {
     const nameCell = `<div class="pn">${esc(s.pitcher)}</div><div class="pm">${meta}</div>`;
-    return `<tr><td>${nameCell}</td><td class="dim" colspan="2">No projection yet</td>
-      <td class="num">${lineCell}</td><td class="dim">—</td></tr>`;
+    return `<tr><td>${nameCell}</td><td class="dim">No projection yet</td>
+      <td class="num">${lineCell(s)}</td></tr>`;
   }
   const nameCell = `<div class="pn">${esc(s.pitcher)}</div>
     <div class="pm">${meta} · ${lineupNote(p.lineup_confidence, p.lineup_tier)}</div>`;
@@ -173,9 +178,7 @@ function tableRow(s) {
   return `<tr data-hasedge="${(s.edges || []).some((e) => e.ev_per_unit > 0)}">
     <td>${nameCell}</td>
     <td class="num proj ${projCls}">${p.point.toFixed(1)}</td>
-    <td class="dim num">${p.p10}–${p.p90}</td>
-    <td class="num">${lineCell}</td>
-    <td>${pickCell}</td>
+    <td class="num">${lineCell(s)}</td>
   </tr>`;
 }
 

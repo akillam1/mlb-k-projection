@@ -92,7 +92,7 @@ footer.site { color: var(--dim); font-size: 11.5px; line-height: 1.6; margin-top
 /* Today: full-slate sortable table view — the primary view, cards below as an alternative */
 .board-tbl { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--line);
   border-radius: 12px; }
-.board-tbl table.t { min-width: 560px; font-variant-numeric: tabular-nums; }
+.board-tbl table.t { min-width: 420px; font-variant-numeric: tabular-nums; }
 .board-tbl thead th { position: sticky; top: 0; background: var(--card); cursor: pointer;
   user-select: none; white-space: nowrap; }
 .board-tbl thead th:hover { color: var(--text); }
@@ -104,6 +104,7 @@ footer.site { color: var(--dim); font-size: 11.5px; line-height: 1.6; margin-top
 /* Proj K is the reason this table exists — biggest, boldest number in it. */
 .board-tbl td .proj { font-weight: 800; font-size: 21px; }
 .board-tbl th[data-key="proj"] { color: var(--text); }
+.board-tbl td .kline-num { font-weight: 600; font-size: 15px; }
 .board-tbl td .pick { font-weight: 600; }
 .board-tbl td .tsub { font-size: 10.5px; margin-top: 1px; }
 .board-tbl tr[data-hasedge="true"] td:first-child { box-shadow: inset 3px 0 var(--green); }
@@ -113,11 +114,7 @@ footer.site { color: var(--dim); font-size: 11.5px; line-height: 1.6; margin-top
   background: linear-gradient(to right, transparent, var(--bg) 92%); pointer-events: none;
   border-radius: 0 12px 12px 0; }
 @media (min-width: 640px) { .board-tbl-wrap::after { display: none; } }
-@media (max-width: 480px) {
-  .board-tbl th:nth-child(3), .board-tbl td:nth-child(3) { display: none; }
-  .board-tbl table.t { min-width: 0; }
-  .board-tbl-wrap::after { display: none; }
-}
+@media (max-width: 480px) { .board-tbl-wrap::after { display: none; } }
 
 /* Lineup status, folded into the pitcher cell's subtext instead of its own column. */
 .lu-high { color: var(--green); } .lu-mid { color: var(--gold); } .lu-low { color: var(--red); }
