@@ -67,6 +67,13 @@ PREFERRED_BOOKS = [b for b in os.environ.get(
     "KPROJ_PREFERRED_BOOKS",
     "draftkings,fanduel,betmgm,caesars,betrivers,bovada,betonlineag",
 ).split(",") if b]
+# Books actually surfaced on the Today board. Robin only bets FanDuel and
+# DraftKings — every other book is still ingested, stored, and used for the
+# Performance page's full historical record, but never shown as a live pick
+# or line on the Today page. Change via KPROJ_SHOWN_BOOKS if that changes.
+SHOWN_BOOKS = [b for b in os.environ.get(
+    "KPROJ_SHOWN_BOOKS", "draftkings,fanduel",
+).split(",") if b]
 BOOK_WEIGHT_MAJOR = 1.0
 BOOK_WEIGHT_OTHER = 0.7
 KELLY_FRACTION = 0.25              # quarter-Kelly

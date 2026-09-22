@@ -93,28 +93,32 @@ def export_today(con, d) -> None:
 
 
 def _k_line_summary(con, date_s: str, pitcher_id: int) -> dict | None:
-    """K line from the canonical book (config.PREFERRED_BOOKS chain) plus its
-    open->latest movement for the Signals page (a second targeted snapshot may
-    land near first pitch). Book count across all books kept for context."""
+    """K line from the canonical book among config.SHOWN_BOOKS (FanDuel and
+    DraftKings — Robin's actual books) plus its open->latest movement. Every
+    book is still ingested and stored for the Performance page's full
+    canonical-chain history; the Today board just never surfaces a line from
+    a book Robin doesn't use."""
+    if not config.SHOWN_BOOKS:
+        return None
+    placeholders = ",".join("?" for _ in config.SHOWN_BOOKS)
     rows = con.execute(
-        """SELECT book,
+        f"""SELECT book,
                   FIRST_VALUE(line) OVER (PARTITION BY book ORDER BY entered_at)      first_line,
                   FIRST_VALUE(line) OVER (PARTITION BY book ORDER BY entered_at DESC) last_line,
                   MAX(entered_at)   OVER (PARTITION BY book) latest_at
            FROM manual_k_lines
-           WHERE date=? AND pitcher_id=? AND is_closing=0""",
-        (date_s, pitcher_id),
+           WHERE date=? AND pitcher_id=? AND is_closing=0 AND book IN ({placeholders})""",
+        (date_s, pitcher_id, *config.SHOWN_BOOKS),
     ).fetchall()
-    per_book = {r["book"]: r for r in rows}          # one row per book
+    per_book = {r["book"]: r for r in rows}          # one row per shown book
     if not per_book:
         return None
-    rank = {b: i for i, b in enumerate(config.PREFERRED_BOOKS)}
+    rank = {b: i for i, b in enumerate(config.SHOWN_BOOKS)}
     book = min(per_book, key=lambda b: (rank.get(b, len(rank)), b))
     r = per_book[book]
     if r["last_line"] is None:
         return None
-    out = {"line": r["last_line"], "book": book, "books": len(per_book),
-           "latest_at": r["latest_at"]}
+    out = {"line": r["last_line"], "book": book, "latest_at": r["latest_at"]}
     if r["first_line"] is not None and r["first_line"] != r["last_line"]:
         out["open"] = r["first_line"]
         out["move"] = round(r["last_line"] - r["first_line"], 1)
@@ -124,14 +128,20 @@ def _k_line_summary(con, date_s: str, pitcher_id: int) -> dict | None:
 def _edges_for(con, game_pk: int, pitcher_id: int) -> list:
     """Ranked by probability edge: model win % minus the vig-free market win %.
     That is the cleanest 'how much more often does the model think this wins
-    than the market does' number; EV and quarter-Kelly ride along for sizing."""
+    than the market does' number; EV and quarter-Kelly ride along for sizing.
+    Restricted to config.SHOWN_BOOKS (FanDuel/DraftKings) — the Today board
+    only ever surfaces a pick at a book Robin actually bets."""
+    if not config.SHOWN_BOOKS:
+        return []
+    placeholders = ",".join("?" for _ in config.SHOWN_BOOKS)
     rows = con.execute(
-        """SELECT book, line, side, odds, model_prob, vigfree_prob, ev_per_unit,
+        f"""SELECT book, line, side, odds, model_prob, vigfree_prob, ev_per_unit,
                   kelly_quarter, score,
                   ROUND(model_prob - vigfree_prob, 4) AS prob_edge
            FROM opportunities WHERE game_pk=? AND pitcher_id=? AND is_latest=1
+                 AND book IN ({placeholders})
            ORDER BY prob_edge DESC, ev_per_unit DESC""",
-        (game_pk, pitcher_id),
+        (game_pk, pitcher_id, *config.SHOWN_BOOKS),
     ).fetchall()
     return [dict(r) for r in rows]
 

@@ -40,10 +40,9 @@ function marketRow(s) {
   let asof = "";
   if (o.fetched_at) {
     const t = new Date(o.fetched_at);
-    if (!isNaN(t)) asof = " · " + t.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    if (!isNaN(t)) asof = t.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   }
-  return `<div class="mkt">${total}${ml}
-    <span class="mkt-src">${o.books} book${o.books === 1 ? "" : "s"}${asof}</span></div>`;
+  return `<div class="mkt">${total}${ml}${asof ? `<span class="mkt-src">${asof}</span>` : ""}</div>`;
 }
 
 /* Probability edge: model win % minus vig-free market win %. Primary ranking. */
@@ -78,48 +77,6 @@ function edgeRows(edges) {
     </div>`).join("") + `</div>`;
 }
 
-/* Slate-wide summary: best +EV edge per starter, ranked by probability edge. */
-function topEdges(starters, n = 8) {
-  const rows = [];
-  (starters || []).forEach((s) => {
-    const pos = dedupeEdges(s.edges).filter((e) => e.ev_per_unit > 0)
-      .sort((a, b) => probEdge(b) - probEdge(a));
-    if (pos.length) rows.push({ s, e: pos[0] });   // one row per starter
-  });
-  return rows.sort((a, b) => probEdge(b.e) - probEdge(a.e)).slice(0, n);
-}
-
-function summaryTable(starters) {
-  const rows = topEdges(starters, 8);
-  if (!rows.length) {
-    return `<h2 class="sec">Top edges</h2>
-      <div class="notice" style="margin:0 0 16px">No positive-EV edges vs the current K lines.
-      Props pull automatically ~10 AM AZ.</div>`;
-  }
-  const body = rows.map(({ s, e }) => {
-    const odds = e.odds > 0 ? "+" + e.odds : e.odds;
-    const pick = `${e.side === "over" ? "▲ O" : "▼ U"} ${e.line}`;
-    return `<tr>
-      <td><div class="pn">${esc(s.pitcher)}</div>
-        <div class="pm">${s.home ? "vs" : "@"} ${esc(s.opp)} · ${esc(s.time_et)}</div></td>
-      <td class="pk">${pick}</td>
-      <td class="dim">${esc(e.book)} ${odds}</td>
-      <td>${(e.model_prob * 100).toFixed(0)}%</td>
-      <td class="pos">+${(probEdge(e) * 100).toFixed(1)}</td>
-      <td class="pos">+${(e.ev_per_unit * 100).toFixed(1)}%</td>
-    </tr>`;
-  }).join("");
-  return `<h2 class="sec">Top edges · biggest model vs. book gaps</h2>
-    <div class="summary">
-      <table class="t summary-t">
-        <thead><tr>
-          <th>Pitcher</th><th>Pick</th><th>Book</th><th>Model</th><th>Edge</th><th>EV</th>
-        </tr></thead>
-        <tbody>${body}</tbody>
-      </table>
-    </div>`;
-}
-
 function card(s) {
   const p = s.proj;
   const head = `
@@ -136,10 +93,23 @@ function card(s) {
     ${head}${rangeBar(p)}
     <div class="badges">${confBadge(p.lineup_confidence, p.lineup_tier)}
       <span class="badge">p10 ${p.p10} · p90 ${p.p90}</span>
-      ${s.k_line ? `<span class="badge">K line ${s.k_line.line} · ${s.k_line.books} bk</span>` : ""}</div>
+      ${s.k_line ? `<span class="badge">K line ${s.k_line.line} <span class="dim">${esc(s.k_line.book)}</span></span>` : ""}</div>
     ${marketRow(s)}
     ${edgeRows(s.edges)}
   </div>`;
+}
+
+/* Edge coloring: projection vs. the K line, same relative-threshold idea as
+   the NBA board — green means the projection clears the line by enough to
+   matter, red means it sits meaningfully under it, gold is a toss-up. Purely
+   a visual cue on top of the actual +EV picks below, not a replacement for them. */
+const LINE_EDGE_THRESHOLD = 0.06;
+function lineEdgeClass(proj, line) {
+  if (proj == null || line == null || !line) return "";
+  const edge = (proj - line) / line;
+  if (edge > LINE_EDGE_THRESHOLD) return "pos";
+  if (edge < -LINE_EDGE_THRESHOLD) return "neg";
+  return "neu";
 }
 
 function bestScore(s) {
@@ -182,7 +152,7 @@ function tableRow(s) {
   const pos = dedupeEdges(s.edges).filter((e) => e.ev_per_unit > 0).sort((a, b) => probEdge(b) - probEdge(a));
   const best = pos[0];
   const lineCell = s.k_line
-    ? `${s.k_line.line} <span class="dim">${s.k_line.books}bk</span>`
+    ? `${s.k_line.line} <span class="dim">${esc(s.k_line.book)}</span>`
     : '<span class="dim">—</span>';
   const pickCell = best
     ? `<span class="pick">${best.side === "over" ? "▲O" : "▼U"} ${best.line}</span>
@@ -195,9 +165,10 @@ function tableRow(s) {
     return `<tr><td>${nameCell}</td><td class="dim" colspan="3">No projection yet</td>
       <td class="num">${lineCell}</td><td class="dim">—</td></tr>`;
   }
+  const projCls = lineEdgeClass(p.point, s.k_line ? s.k_line.line : null);
   return `<tr data-hasedge="${(s.edges || []).some((e) => e.ev_per_unit > 0)}">
     <td>${nameCell}</td>
-    <td class="num proj">${p.point.toFixed(1)}</td>
+    <td class="num proj ${projCls}">${p.point.toFixed(1)}</td>
     <td class="dim num">${p.p10}–${p.p90}</td>
     <td>${confBadgeCompact(p.lineup_confidence, p.lineup_tier)}</td>
     <td class="num">${lineCell}</td>
@@ -229,10 +200,9 @@ async function main() {
   $("#subtitle").textContent = `${data.date} · updated ${upd.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
   const starters = (data.starters || []).slice()
     .sort((a, b) => bestScore(b) - bestScore(a) || String(a.time_et).localeCompare(b.time_et));
-  $("#summary").innerHTML = summaryTable(starters);
 
   let currentFilter = localStorage.getItem("kproj_filter") || "all";
-  let viewMode = localStorage.getItem("kproj_view") || "cards";
+  let viewMode = localStorage.getItem("kproj_view") || "table";
 
   const render = () => {
     const list = currentFilter === "edges" ? starters.filter((s) => bestScore(s) > 0) : starters;

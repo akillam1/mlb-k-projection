@@ -77,7 +77,7 @@ table.t { width: 100%; border-collapse: collapse; font-size: 13px; }
 table.t th { text-align: left; color: var(--dim); font-weight: 500; padding: 6px 6px;
   border-bottom: 1px solid var(--line); font-size: 11.5px; text-transform: uppercase; }
 table.t td { padding: 7px 6px; border-bottom: 1px solid var(--card2); }
-.pos { color: var(--green); } .neg { color: var(--red); } .dim { color: var(--dim); }
+.pos { color: var(--green); } .neg { color: var(--red); } .neu { color: var(--gold); } .dim { color: var(--dim); }
 canvas { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
   padding: 8px; margin-bottom: 12px; }
 footer.site { color: var(--dim); font-size: 11.5px; line-height: 1.6; margin-top: 28px;
@@ -89,17 +89,7 @@ footer.site { color: var(--dim); font-size: 11.5px; line-height: 1.6; margin-top
 .prose code { background: var(--card2); padding: 1px 5px; border-radius: 4px; font-size: 12.5px; }
 @media (min-width: 640px) { .tiles { grid-template-columns: repeat(4, 1fr); } }
 
-/* Today: slate-wide top-edges summary table */
-.summary { overflow-x: auto; margin-bottom: 16px; -webkit-overflow-scrolling: touch; }
-.summary-t { min-width: 340px; }
-.summary-t td { vertical-align: middle; }
-.summary-t .pn { font-weight: 600; white-space: nowrap; }
-.summary-t .pm { color: var(--dim); font-size: 11px; margin-top: 1px; white-space: nowrap; }
-.summary-t .pk { font-weight: 600; white-space: nowrap; }
-.summary-t td.pos { font-weight: 700; }
-.summary-t th:nth-child(n+4), .summary-t td:nth-child(n+4) { text-align: right; }
-
-/* Today: full-slate sortable table view (alternative to the card list) */
+/* Today: full-slate sortable table view — the primary view, cards below as an alternative */
 .board-tbl { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--line);
   border-radius: 12px; }
 .board-tbl table.t { min-width: 560px; font-variant-numeric: tabular-nums; }

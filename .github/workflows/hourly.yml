@@ -3,12 +3,16 @@ name: Hourly signals
 # FanGraphs comparison (1x/day), capper settlement, and the Signals page JSON.
 # Fully independent of kproj.db: state lives in its own small signals.db
 # release asset, so this can never race or clobber the projection database.
-# ~15 runs/day, all free: StatsAPI + FanGraphs are keyless; NO Odds API calls.
-
+#
+# PAUSED: the Signals tab wasn't getting used and capper scraping had stopped
+# working reliably (X blocks free automated access), so this no longer runs
+# on a schedule. The code is untouched — trigger it by hand any time from the
+# Actions tab ("Hourly signals" -> "Run workflow"), or restore the `schedule:`
+# block below to bring it back permanently.
 on:
-  schedule:
-    - cron: "25 14-23 * * *"   # 7:25 AM – 4:25 PM PT
-    - cron: "25 0-4 * * *"     # 5:25 PM – 9:25 PM PT
+  # schedule:
+  #   - cron: "25 14-23 * * *"   # 7:25 AM – 4:25 PM PT
+  #   - cron: "25 0-4 * * *"     # 5:25 PM – 9:25 PM PT
   workflow_dispatch:
 
 concurrency:

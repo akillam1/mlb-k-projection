@@ -18,9 +18,13 @@ small scheduled jobs and host simple websites for free.
 - A website like `https://yourname.github.io/mlb-k-projection/` — bookmark it on your phone.
 - It refreshes itself on a fixed clock: **7:00 PM, 8:00 AM and 3:00 PM Arizona**.
   The header always says when it last updated and when the next one lands.
-- K prop lines pull automatically from the books once a day. You can still
-  type lines in from your phone (manual_lines.csv) to add books, update stale
-  lines, or record closing lines — the site rescores a couple of minutes later.
+- K prop lines pull automatically from the books once a day. The board only
+  ever shows a line or a pick from FanDuel or DraftKings — the two books
+  actually used day to day; every other book The Odds API returns still feeds
+  the model and the historical record, it just never surfaces on the board.
+  You can still type lines in from your phone (manual_lines.csv) to update a
+  stale line or record a closing line — the site rescores a couple of minutes
+  later.
 
 ## How it works, in plain words
 
@@ -201,16 +205,16 @@ where the robots live; a "workflow" is one robot task.
 | **¼K (quarter-Kelly)** | Suggested bet size as % of your bankroll, deliberately conservative |
 | **Performance page** | The model's full track record — ROI, hit rate, and whether its confidence matches reality (calibration). If the model is cold, this page will say so |
 
-**Signals tab:** answers "should I actually bet this, and now?" Each starter
-gets a pick window — GO (edge ≥5 pts, lineups posted, fresh un-moved line),
-CAUTION (something to verify first), WAIT (no edge/no line), OFF (started or
-scratched) — with the reasons spelled out. Cards compare our number vs the
-book line (with movement since open) vs FanGraphs, and show any tracked
-capper's pick with an agree/disagree call. Below that: a scorecard of each
-capper's parsed-pick record settled against boxscores, and their latest posts.
-Tracked accounts: @KSplitAnalytics, @WiningPlaybook, @HausOfPicks, @IIPatll,
-@AlexCaruso (edit SIGNALS_CAPPERS in kproj/config.py to change). Missed picks
-can be added from your phone via lines/capper_picks.csv.
+The Today board defaults to a sortable table — tap **Proj K** (or any column
+header) to sort ascending/descending, or **K line** to see who the model likes
+most relative to the current line. The **Table/Cards** toggle switches to the
+original per-pitcher card layout if you want the full range bar and edge list
+for one start at a time.
+
+There used to be a Signals tab (pick windows, capper picks scraped from X) —
+it wasn't getting used and the capper scraping had stopped working, so it's
+off the nav now. See [methodology.html](https://yourname.github.io/mlb-k-projection/methodology.html)
+if you ever want to revive it.
 
 ## Entering K lines from your phone (~2 min, optional)
 
@@ -224,7 +228,9 @@ lines for CLV. Full guide with examples:
    pencil icon (edit).
 3. Add one row per line you see in your sportsbook, e.g.
    `2026-06-12,Skubal,draftkings,7.5,-115,-105,0`
-   (date, pitcher last name, book, line, over odds, under odds, 0).
+   (date, pitcher last name, book, line, over odds, under odds, 0). Only
+   `draftkings` and `fanduel` rows show up on the board — other books are
+   still saved but stay off-screen.
 4. Tap **Commit changes**. ~2 minutes later the site shows ranked edges.
 
 Bonus for bragging rights: just before first pitch, add the same line again
@@ -258,13 +264,11 @@ late still produces the right day.
 
 ---
 
-**Hourly signals (7:25 AM – 9:25 PM PT):** the Signals tab's feed. Scrapes the
-tracked X capper accounts through public mirrors (best-effort — X blocks free
-automated access, so expect gaps; the page shows exactly how fresh each source
-is), pulls live lineup/scratch status from the official MLB Stats API, grabs
-FanGraphs' free projections once a day for an independent second opinion, and
-settles capper picks against final boxscores. Costs nothing and never touches
-the main database.
+**Hourly signals — paused.** This used to run 7:25 AM–9:25 PM PT to feed the
+Signals tab (capper scraping, lineup/scratch status, FanGraphs comparison).
+The tab wasn't used and capper scraping had stopped working reliably, so the
+schedule is commented out in `.github/workflows/hourly.yml`. It's still there
+to run by hand (Actions → Hourly signals → Run workflow) or re-enable.
 
 # If something looks wrong
 

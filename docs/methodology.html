@@ -15,7 +15,6 @@
   </header>
   <nav class="tabs">
     <a href="index.html">Today</a>
-    <a href="validation.html">Signals</a>
     <a href="performance.html">Performance</a>
     <a href="methodology.html" class="active">Methodology</a>
   </nav>
@@ -55,8 +54,6 @@
       can also fire these directly; see the repo's README for details.) The header on
       every page shows the last update and the next one, and flags a slot that is
       running late instead of quietly showing stale numbers.</li>
-      <li><b>Hourly, ~7 AM–9 PM AZ — Signals feed.</b> A lighter job refreshes the
-      Signals tab: capper posts, lineup status, and pick windows.</li>
       <li><b>Sunday overnight — weekly retrain</b> on every start since 2022.</li>
       <li><b>Manual:</b> lines typed into <code>lines/manual_lines.csv</code> rescore
       within a couple of minutes; a "Run workflow" tap in the GitHub app forces a full
@@ -64,14 +61,17 @@
       games to capture line movement).</li>
     </ul>
 
-    <h2>One pick, one book</h2>
-    <p>The same bet is usually offered at half a dozen books at slightly different
-    prices — for bookkeeping that is <b>one pick, not six</b>. Everything on the
-    Performance and Signals pages is scored against a single <b>canonical book</b> per
-    pick: DraftKings when it has a line (the most consistent coverage in our odds
-    feed), otherwise the next book down a fixed chain (FanDuel, BetMGM, Caesars,
-    BetRivers, Bovada, BetOnline). All books are still ingested and stored — the Today
-    page simply shows the best available price for each pick, tagged with its book.</p>
+    <h2>Only FanDuel and DraftKings</h2>
+    <p>The Today board only ever shows a line or a pick from FanDuel or DraftKings —
+    the two books actually used day to day. Every other book The Odds API returns is
+    still ingested and stored (it feeds the model and the full historical record
+    below), it just never surfaces on the board. The Performance page goes one step
+    further for its own bookkeeping: the same bet is usually offered at several books
+    at slightly different prices, and for lifetime record-keeping that's <b>one pick,
+    not six</b> — so Performance scores against a single <b>canonical book</b> per
+    pick across the full set it stores (DraftKings when it has a line, otherwise the
+    next book down a fixed chain), independent of which two books the Today board
+    displays.</p>
 
     <h2>The model</h2>
     <p>A LightGBM gradient-boosted tree model with a Poisson objective produces the
@@ -120,28 +120,15 @@
     high win probability at a price that still loses money long-run (heavy vig)
     is not a pick.</p>
 
-    <h2>How to read the Signals tab</h2>
-    <p>Signals is the <i>pre-game</i> validation view: is this pick ready to bet, and
-    does anyone else agree?</p>
-    <ul>
-      <li><b>Pick window:</b> every starter gets a GO / CAUTION / WAIT / OFF state.
-      GO requires a probability edge of at least 5 points, both lineups posted, and a
-      fresh K line. CAUTION and WAIT list exactly what's missing — stale line, lineups
-      not posted, or the line moved against the model. OFF means no line yet or a
-      scratched starter.</li>
-      <li><b>Model / Line / FanGraphs row:</b> three independent per-start K numbers —
-      our projection, the canonical book's line, and FanGraphs Depth Charts converted
-      to a per-start figure. Three arrows pointing the same way is corroboration; the
-      model standing alone is a reason for extra care.</li>
-      <li><b>Capper picks:</b> K-prop picks pulled best-effort from five X accounts
-      (public mirrors go down; <code>lines/capper_picks.csv</code> is the manual
-      fallback). Each pick is tagged "model agrees / disagrees" with our win %.</li>
-      <li><b>Capper scorecard:</b> every parsed capper pick is settled against the
-      official MLB box score at 1u flat — the same rules our own record uses, so the
-      comparison is honest.</li>
-      <li><b>Source health chips:</b> when each feed (props, cappers, FanGraphs,
-      lineups) last succeeded — a quiet card means "no data", not "no edge".</li>
-    </ul>
+    <h2>Signals tab — turned off</h2>
+    <p>There used to be a Signals tab: a pre-game validation view with GO/CAUTION/WAIT
+    pick windows, a model/line/FanGraphs comparison, and capper picks scraped
+    best-effort from X. It wasn't getting used and mostly repeated what the Today
+    board already showed, and the capper scraping had stopped working reliably (X
+    blocks free automated access), so the hourly job that fed it is paused and the tab
+    is off the nav. The code and data (<code>kproj/signals/</code>,
+    <code>docs/data/validation.json</code>) are still in the repo if it's ever worth
+    reviving — <code>python -m kproj signals</code> still runs it by hand.</p>
 
     <h2>How to read the Performance tab</h2>
     <p>Performance is the <i>after-the-fact</i> record. Everything on it follows the
@@ -166,15 +153,13 @@
     <ul>
       <li>K prop lines pull once each morning (free-tier credit budget), with a
       targeted re-pull on the top-edge games at 3:00 PM AZ. Lines can still drift after
-      that — the Signals tab shows line freshness for exactly this reason.</li>
+      that.</li>
       <li>The 7:00 PM AZ refresh is an hour earlier than it used to be, so more games
       — not just East-coast night games and late West-coast starts, but some
       still-in-progress games generally — are unsettled at flip time and finish
       reconciling on the next morning's run. That is why a just-flipped evening board
       shows yesterday's results as partial, more often than before.</li>
       <li>CLV is only measured when a closing line is entered manually.</li>
-      <li>Capper tracking is best-effort scraping of public mirrors — gaps happen and
-      are shown as source-health warnings, not silently filled.</li>
       <li>Retractable-roof parks: day-of roof status isn't freely available, so weather
       is attenuated rather than exact.</li>
       <li>Trust the calibration plot and 30-day panel over any single hot streak;
