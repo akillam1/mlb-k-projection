@@ -242,11 +242,12 @@ the strongest evidence a model beats the market.
 Lineups just posted? **GitHub app → your repo → Actions → Daily refresh → Run
 workflow.** Five minutes later the site is current.
 
-The **⟳ Refresh** button on the site does *not* start a run — it re-checks for a
-newer export and loads it, and tells you how old the current one is. (It used to
-need a GitHub token baked into a public file; with no token it just bounced you
-to a GitHub page you had to be signed in to read, which looked broken. Honest
-beats fake.) If you have the Worker deployed with a `PING_KEY`, visiting
+The **⟳ Check for update** button on the site does *not* start a run — it's
+named that on purpose. It re-checks for a newer export and loads it, and tells
+you how old the current one is. (It used to say "Refresh" and need a GitHub
+token baked into a public file; with no token it just bounced you to a GitHub
+page you had to be signed in to read, which looked broken. Honest beats fake.)
+If you have the Worker deployed with a `PING_KEY`, visiting
 `https://<worker>.workers.dev/run?key=…` starts a run from any browser.
 
 ## What runs automatically
@@ -326,7 +327,7 @@ weather data license and everything else free and simple.
 | Command | Covers |
 |---|---|
 | `python scripts/test_board_date.py` | Board rollover, odds-window timing, the workflow gate |
-| `node scripts/test_refresh.js` | The site's freshness strip and Refresh button |
+| `node scripts/test_refresh.js` | The site's freshness strip and Check for update button |
 | `python scripts/test_signals.py` | Signals parser, scraper, settlement, export |
 | `python scripts/smoke_test.py` | Full pipeline on fake data |
 

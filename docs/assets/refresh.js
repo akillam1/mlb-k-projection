@@ -62,7 +62,7 @@
   var btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'kb-refresh';
-  btn.textContent = '⟳ Refresh';
+  btn.textContent = '⟳ Check for update';
   strip.appendChild(note);
   strip.appendChild(btn);
   header.appendChild(strip);
@@ -173,7 +173,7 @@
     btn.disabled = true;
     setTimeout(function () {
       btn.disabled = false;
-      if (pending) { markPending(); } else { btn.textContent = '⟳ Refresh'; render(); }
+      if (pending) { markPending(); } else { btn.textContent = '⟳ Check for update'; render(); }
     }, 2200);
   }
 
@@ -184,7 +184,7 @@
     check(true).then(function () {
       if (btn.textContent === '⟳ Checking…') {
         btn.disabled = false;
-        btn.textContent = '⟳ Refresh';
+        btn.textContent = '⟳ Check for update';
         render();
       }
     });
