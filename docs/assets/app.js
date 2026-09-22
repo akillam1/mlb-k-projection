@@ -117,11 +117,14 @@ function bestScore(s) {
   return pos.length ? Math.max(...pos.map(probEdge)) : -1;
 }
 
-function confBadgeCompact(conf, tier) {
-  const cls = conf >= 0.95 ? "conf-high" : conf >= 0.5 ? "conf-mid" : "conf-low";
+/* Short lineup note, folded into the pitcher cell's subtext rather than its
+   own column — the confidence number mattered less than knowing at a glance
+   whether it's a real lineup yet, so a colored word does that job in less space. */
+function lineupNote(conf, tier) {
+  const cls = conf >= 0.95 ? "lu-high" : conf >= 0.5 ? "lu-mid" : "lu-low";
   const label = { confirmed: "lineup confirmed", actual: "lineup confirmed",
-    common7d: "projected lineup", team_agg: "team-average lineup" }[tier] || "lineup unknown";
-  return `<span class="badge ${cls}" title="${esc(label)}">${Math.round(conf * 100)}%</span>`;
+    common7d: "projected lineup", team_agg: "team-avg lineup" }[tier] || "lineup unknown";
+  return `<span class="${cls}">${label}</span>`;
 }
 
 /* ---------------- Table view: same slate, one sortable row per starter ---------------- */
@@ -130,7 +133,6 @@ const TABLE_COLS = [
   { key: "pitcher", label: "Pitcher", num: false, get: (s) => s.pitcher },
   { key: "proj", label: "Proj K", num: true, get: (s) => (s.proj ? s.proj.point : -1) },
   { key: "range", label: "p10–p90", num: true, get: (s) => (s.proj ? s.proj.p50 : -1) },
-  { key: "conf", label: "Lineup", num: true, get: (s) => (s.proj ? s.proj.lineup_confidence : -1) },
   { key: "line", label: "K line", num: true, get: (s) => (s.k_line ? s.k_line.line : -1) },
   { key: "pick", label: "Best pick", num: true, get: (s) => bestScore(s) },
 ];
@@ -159,18 +161,19 @@ function tableRow(s) {
        <span class="dim"> ${esc(best.book)} ${best.odds > 0 ? "+" + best.odds : best.odds}</span>
        <div class="dim tsub">+${(probEdge(best) * 100).toFixed(1)} pts · +${(best.ev_per_unit * 100).toFixed(1)}% EV</div>`
     : '<span class="dim">—</span>';
-  const nameCell = `<div class="pn">${esc(s.pitcher)}</div>
-    <div class="pm">${esc(s.team)} ${s.home ? "vs" : "@"} ${esc(s.opp)} · ${esc(s.time_et)}</div>`;
+  const meta = `${esc(s.team)} ${s.home ? "vs" : "@"} ${esc(s.opp)} · ${esc(s.time_et)}`;
   if (!p) {
-    return `<tr><td>${nameCell}</td><td class="dim" colspan="3">No projection yet</td>
+    const nameCell = `<div class="pn">${esc(s.pitcher)}</div><div class="pm">${meta}</div>`;
+    return `<tr><td>${nameCell}</td><td class="dim" colspan="2">No projection yet</td>
       <td class="num">${lineCell}</td><td class="dim">—</td></tr>`;
   }
+  const nameCell = `<div class="pn">${esc(s.pitcher)}</div>
+    <div class="pm">${meta} · ${lineupNote(p.lineup_confidence, p.lineup_tier)}</div>`;
   const projCls = lineEdgeClass(p.point, s.k_line ? s.k_line.line : null);
   return `<tr data-hasedge="${(s.edges || []).some((e) => e.ev_per_unit > 0)}">
     <td>${nameCell}</td>
     <td class="num proj ${projCls}">${p.point.toFixed(1)}</td>
     <td class="dim num">${p.p10}–${p.p90}</td>
-    <td>${confBadgeCompact(p.lineup_confidence, p.lineup_tier)}</td>
     <td class="num">${lineCell}</td>
     <td>${pickCell}</td>
   </tr>`;
