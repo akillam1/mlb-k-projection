@@ -147,6 +147,76 @@ function bestScore(s) {
   return pos.length ? Math.max(...pos.map(probEdge)) : -1;
 }
 
+function confBadgeCompact(conf, tier) {
+  const cls = conf >= 0.95 ? "conf-high" : conf >= 0.5 ? "conf-mid" : "conf-low";
+  const label = { confirmed: "lineup confirmed", actual: "lineup confirmed",
+    common7d: "projected lineup", team_agg: "team-average lineup" }[tier] || "lineup unknown";
+  return `<span class="badge ${cls}" title="${esc(label)}">${Math.round(conf * 100)}%</span>`;
+}
+
+/* ---------------- Table view: same slate, one sortable row per starter ---------------- */
+
+const TABLE_COLS = [
+  { key: "pitcher", label: "Pitcher", num: false, get: (s) => s.pitcher },
+  { key: "proj", label: "Proj K", num: true, get: (s) => (s.proj ? s.proj.point : -1) },
+  { key: "range", label: "p10–p90", num: true, get: (s) => (s.proj ? s.proj.p50 : -1) },
+  { key: "conf", label: "Lineup", num: true, get: (s) => (s.proj ? s.proj.lineup_confidence : -1) },
+  { key: "line", label: "K line", num: true, get: (s) => (s.k_line ? s.k_line.line : -1) },
+  { key: "pick", label: "Best pick", num: true, get: (s) => bestScore(s) },
+];
+
+let sortState = { key: "proj", dir: "desc" };
+
+function sortStarters(list) {
+  const col = TABLE_COLS.find((c) => c.key === sortState.key) || TABLE_COLS[TABLE_COLS.length - 1];
+  const dir = sortState.dir === "asc" ? 1 : -1;
+  return list.slice().sort((a, b) => {
+    const av = col.get(a), bv = col.get(b);
+    if (col.num) return dir * ((av ?? -1) - (bv ?? -1));
+    return dir * String(av ?? "").localeCompare(String(bv ?? ""));
+  });
+}
+
+function tableRow(s) {
+  const p = s.proj;
+  const pos = dedupeEdges(s.edges).filter((e) => e.ev_per_unit > 0).sort((a, b) => probEdge(b) - probEdge(a));
+  const best = pos[0];
+  const lineCell = s.k_line
+    ? `${s.k_line.line} <span class="dim">${s.k_line.books}bk</span>`
+    : '<span class="dim">—</span>';
+  const pickCell = best
+    ? `<span class="pick">${best.side === "over" ? "▲O" : "▼U"} ${best.line}</span>
+       <span class="dim"> ${esc(best.book)} ${best.odds > 0 ? "+" + best.odds : best.odds}</span>
+       <div class="dim tsub">+${(probEdge(best) * 100).toFixed(1)} pts · +${(best.ev_per_unit * 100).toFixed(1)}% EV</div>`
+    : '<span class="dim">—</span>';
+  const nameCell = `<div class="pn">${esc(s.pitcher)}</div>
+    <div class="pm">${esc(s.team)} ${s.home ? "vs" : "@"} ${esc(s.opp)} · ${esc(s.time_et)}</div>`;
+  if (!p) {
+    return `<tr><td>${nameCell}</td><td class="dim" colspan="3">No projection yet</td>
+      <td class="num">${lineCell}</td><td class="dim">—</td></tr>`;
+  }
+  return `<tr data-hasedge="${(s.edges || []).some((e) => e.ev_per_unit > 0)}">
+    <td>${nameCell}</td>
+    <td class="num proj">${p.point.toFixed(1)}</td>
+    <td class="dim num">${p.p10}–${p.p90}</td>
+    <td>${confBadgeCompact(p.lineup_confidence, p.lineup_tier)}</td>
+    <td class="num">${lineCell}</td>
+    <td>${pickCell}</td>
+  </tr>`;
+}
+
+function tableView(starters) {
+  const rows = sortStarters(starters).map(tableRow).join("");
+  const head = TABLE_COLS.map((c) => {
+    const active = c.key === sortState.key;
+    const arrow = active ? (sortState.dir === "asc" ? " ↑" : " ↓") : "";
+    return `<th data-key="${c.key}" class="${active ? "sort-on" : ""}${c.num ? " num" : ""}">${esc(c.label)}${arrow}</th>`;
+  }).join("");
+  return `<div class="board-tbl-wrap"><div class="board-tbl">
+    <table class="t"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table>
+  </div></div>`;
+}
+
 async function main() {
   let data;
   try {
@@ -160,22 +230,47 @@ async function main() {
   const starters = (data.starters || []).slice()
     .sort((a, b) => bestScore(b) - bestScore(a) || String(a.time_et).localeCompare(b.time_et));
   $("#summary").innerHTML = summaryTable(starters);
-  const render = (filter) => {
-    const list = filter === "edges" ? starters.filter((s) => bestScore(s) > 0) : starters;
-    $("#board").innerHTML = list.length
-      ? list.map(card).join("")
-      : '<div class="notice">' + (filter === "edges"
-          ? "No positive-EV edges right now. Enter today's K lines or check back after the next refresh."
-          : "No games on the slate today.") + "</div>";
+
+  let currentFilter = localStorage.getItem("kproj_filter") || "all";
+  let viewMode = localStorage.getItem("kproj_view") || "cards";
+
+  const render = () => {
+    const list = currentFilter === "edges" ? starters.filter((s) => bestScore(s) > 0) : starters;
+    if (!list.length) {
+      $("#board").innerHTML = '<div class="notice">' + (currentFilter === "edges"
+        ? "No positive-EV edges right now. Enter today's K lines or check back after the next refresh."
+        : "No games on the slate today.") + "</div>";
+      return;
+    }
+    $("#board").innerHTML = viewMode === "table" ? tableView(list) : list.map(card).join("");
+    if (viewMode === "table") {
+      $("#board").querySelectorAll("th[data-key]").forEach((th) => th.addEventListener("click", () => {
+        const key = th.dataset.key;
+        sortState = key === sortState.key
+          ? { key, dir: sortState.dir === "asc" ? "desc" : "asc" }
+          : { key, dir: "desc" };
+        render();
+      }));
+    }
   };
-  document.querySelectorAll(".chip").forEach((ch) => ch.addEventListener("click", () => {
-    document.querySelectorAll(".chip").forEach((c) => c.classList.remove("on"));
+
+  document.querySelectorAll(".chip[data-f]").forEach((ch) => ch.addEventListener("click", () => {
+    document.querySelectorAll(".chip[data-f]").forEach((c) => c.classList.remove("on"));
     ch.classList.add("on");
-    localStorage.setItem("kproj_filter", ch.dataset.f);
-    render(ch.dataset.f);
+    currentFilter = ch.dataset.f;
+    localStorage.setItem("kproj_filter", currentFilter);
+    render();
   }));
-  const saved = localStorage.getItem("kproj_filter") || "all";
-  document.querySelectorAll(".chip").forEach((c) => c.classList.toggle("on", c.dataset.f === saved));
-  render(saved);
+  document.querySelectorAll(".chip[data-v]").forEach((ch) => ch.addEventListener("click", () => {
+    document.querySelectorAll(".chip[data-v]").forEach((c) => c.classList.remove("on"));
+    ch.classList.add("on");
+    viewMode = ch.dataset.v;
+    localStorage.setItem("kproj_view", viewMode);
+    render();
+  }));
+
+  document.querySelectorAll(".chip[data-f]").forEach((c) => c.classList.toggle("on", c.dataset.f === currentFilter));
+  document.querySelectorAll(".chip[data-v]").forEach((c) => c.classList.toggle("on", c.dataset.v === viewMode));
+  render();
 }
 main();

@@ -23,10 +23,10 @@
   var cfg = document.currentScript ? document.currentScript.dataset : {};
   var SRC = cfg.src || 'data/meta.json';
 
-  // Minutes past 00:00 UTC. Daily = the three real update slots (8:00 PM /
+  // Minutes past 00:00 UTC. Daily = the three real update slots (7:00 PM /
   // 8:00 AM / 3:00 PM Arizona). Hourly = the signals job, :25 past each hour it
   // runs (see .github/workflows/hourly.yml).
-  var DAILY = [3 * 60, 15 * 60, 22 * 60];
+  var DAILY = [2 * 60, 15 * 60, 22 * 60];
   var HOURLY = [];
   [14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 0, 1, 2, 3, 4].forEach(function (h) {
     HOURLY.push(h * 60 + 25);

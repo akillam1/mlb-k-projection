@@ -14,10 +14,16 @@ nav.tabs { display: flex; gap: 6px; margin: 6px 0 14px; }
 nav.tabs a { flex: 1; text-align: center; padding: 9px 4px; border-radius: 9px; font-size: 13.5px;
   text-decoration: none; color: var(--dim); background: var(--card); border: 1px solid var(--line); }
 nav.tabs a.active { color: var(--text); border-color: var(--accent); background: var(--card2); }
-.chips { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+.chiprow { display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  flex-wrap: wrap; margin-bottom: 12px; }
+.chips { display: flex; gap: 6px; margin-bottom: 0; flex-wrap: wrap; }
 .chip { font-size: 12.5px; padding: 6px 12px; border-radius: 999px; background: var(--card);
   border: 1px solid var(--line); color: var(--dim); cursor: pointer; }
 .chip.on { color: var(--text); border-color: var(--accent); }
+.view-chips { background: var(--card); border: 1px solid var(--line); border-radius: 999px;
+  padding: 3px; gap: 0; }
+.view-chips .chip { background: transparent; border: none; padding: 5px 12px; }
+.view-chips .chip.on { color: var(--bg); background: var(--accent); border-radius: 999px; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
   padding: 12px 14px; margin-bottom: 10px; }
 .card .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
@@ -92,6 +98,35 @@ footer.site { color: var(--dim); font-size: 11.5px; line-height: 1.6; margin-top
 .summary-t .pk { font-weight: 600; white-space: nowrap; }
 .summary-t td.pos { font-weight: 700; }
 .summary-t th:nth-child(n+4), .summary-t td:nth-child(n+4) { text-align: right; }
+
+/* Today: full-slate sortable table view (alternative to the card list) */
+.board-tbl { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--line);
+  border-radius: 12px; }
+.board-tbl table.t { min-width: 560px; font-variant-numeric: tabular-nums; }
+.board-tbl thead th { position: sticky; top: 0; background: var(--card); cursor: pointer;
+  user-select: none; white-space: nowrap; }
+.board-tbl thead th:hover { color: var(--text); }
+.board-tbl thead th.sort-on { color: var(--accent); }
+.board-tbl th.num, .board-tbl td.num { text-align: right; }
+.board-tbl td { vertical-align: middle; }
+.board-tbl td .pn { font-weight: 600; white-space: nowrap; }
+.board-tbl td .pm { color: var(--dim); font-size: 11px; margin-top: 1px; white-space: nowrap; }
+.board-tbl td .proj { font-weight: 700; font-size: 14.5px; }
+.board-tbl td .pick { font-weight: 600; }
+.board-tbl td .tsub { font-size: 10.5px; margin-top: 1px; }
+.board-tbl tr[data-hasedge="true"] td:first-child { box-shadow: inset 3px 0 var(--green); }
+.board-tbl tbody tr:last-child td { border-bottom: none; }
+.board-tbl-wrap { position: relative; }
+.board-tbl-wrap::after { content: ""; position: absolute; top: 0; right: 0; bottom: 0; width: 18px;
+  background: linear-gradient(to right, transparent, var(--bg) 92%); pointer-events: none;
+  border-radius: 0 12px 12px 0; }
+@media (min-width: 640px) { .board-tbl-wrap::after { display: none; } }
+@media (max-width: 480px) {
+  .board-tbl th:nth-child(3), .board-tbl td:nth-child(3),
+  .board-tbl th:nth-child(5), .board-tbl td:nth-child(5) { display: none; }
+  .board-tbl table.t { min-width: 0; }
+  .board-tbl-wrap::after { display: none; }
+}
 
 /* Signals page */
 .win { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 6px;

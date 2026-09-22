@@ -69,7 +69,7 @@ def window_open(board_day: date, hour_utc: int, now: datetime | None = None) -> 
     """Has the UTC fetch window for this board day opened?
 
     Anchored to the board day, not to the bare UTC hour. The board rolls at
-    03:00 UTC, so a run that lands at 00:30 UTC is still working the previous
+    02:00 UTC, so a run that lands at 00:30 UTC is still working the previous
     board day — whose window opened at 15:00 UTC the morning before. Comparing
     hours alone ("is 0 >= 15?") answered no and silently skipped the fetch.
     """

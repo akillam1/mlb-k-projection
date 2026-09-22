@@ -13,7 +13,7 @@ from . import store
 def refresh(con) -> list:
     """Fetch today+tomorrow schedule. Stores per-game state; returns probables
     [(pitcher_id, name, date, game_pk)] for the pick parser."""
-    # Span the wall-clock day AND the board day (+1): between the 8 PM rollover
+    # Span the wall-clock day AND the board day (+1): between the 7 PM rollover
     # and local midnight those differ, and tonight's games still need snapshots
     # for settlement.
     today = min(util.today_et(), util.board_date())

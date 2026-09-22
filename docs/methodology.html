@@ -24,8 +24,9 @@
     <h2>What this is</h2>
     <p>A hobby model that projects strikeout totals for every MLB starting pitcher,
     compares them to sportsbook over/under lines, and ranks any positive-expected-value
-    edges. It runs itself on a nightly cycle: every evening after most games finish it
-    scores the completed slate and projects the following day, and every morning it
+    edges. It runs itself on a nightly cycle: every evening, once most games are done
+    or well into their final innings, it scores the completed slate and projects the
+    following day, and every morning it
     pulls the day's betting lines. Every projection is logged before games start and
     results are reconciled automatically. Nothing is ever deleted or cherry-picked —
     the <a href="performance.html" style="color:var(--accent)">Performance page</a> is
@@ -33,23 +34,27 @@
 
     <h2>The update cycle</h2>
     <ul>
-      <li><b>8:00 PM AZ — nightly model refresh.</b> Runs after most games are final:
-      ingests the day's box scores, scores every logged projection, settles picks, and
-      projects the <i>following day's</i> probable starters. This is when the board
-      flips to tomorrow — and it flips because the code says 8 PM, not because of when
-      the job happens to start.</li>
+      <li><b>7:00 PM AZ — nightly model refresh.</b> Ingests the day's box scores so
+      far, scores every logged projection, settles picks, and projects the
+      <i>following day's</i> probable starters. This is when the board flips to
+      tomorrow — and it flips because the code says 7 PM, not because of when the
+      job happens to start. Because this now runs earlier than before, more games
+      are typically still in progress at flip time (see "Honest limitations" below).</li>
       <li><b>8:00 AM AZ — morning odds run.</b> Pulls game totals/moneylines and K
       prop lines for the day's slate from US books (free-tier credit budget), settles
-      any West-coast games that finished after the nightly run, and rescores edges
+      any games that finished after the nightly run, and rescores edges
       against the fresh lines.</li>
       <li><b>3:00 PM AZ — pre-slate refresh.</b> Firmed-up lineups, plus a targeted
       re-pull of K props on the top-edge games to catch line movement.</li>
-      <li><b>Why those times are exact.</b> GitHub's own scheduler is best-effort and
-      was running these jobs one to three hours late, so the board updated at random
-      hours. The three slots are now fired by an external free scheduler; GitHub's
-      crons remain only as a fallback. The header on every page shows the last update
-      and the next one, and flags a slot that is running late instead of quietly
-      showing stale numbers.</li>
+      <li><b>Why those times are (roughly) exact.</b> GitHub's own scheduler is
+      best-effort and can run these jobs late by hours if left to a single daily
+      check-in per slot. Rather than one check-in per slot, the workflow checks in
+      every 15 minutes across each target window, so a late scheduler run still gets
+      caught and published quickly — a check that finds the data already fresh exits
+      in seconds, so this costs nothing extra. (An external on-the-minute scheduler
+      can also fire these directly; see the repo's README for details.) The header on
+      every page shows the last update and the next one, and flags a slot that is
+      running late instead of quietly showing stale numbers.</li>
       <li><b>Hourly, ~7 AM–9 PM AZ — Signals feed.</b> A lighter job refreshes the
       Signals tab: capper posts, lineup status, and pick windows.</li>
       <li><b>Sunday overnight — weekly retrain</b> on every start since 2022.</li>
@@ -162,9 +167,11 @@
       <li>K prop lines pull once each morning (free-tier credit budget), with a
       targeted re-pull on the top-edge games at 3:00 PM AZ. Lines can still drift after
       that — the Signals tab shows line freshness for exactly this reason.</li>
-      <li>Most games are final by the 8:00 PM AZ refresh, but East-coast night games
-      and late West-coast games settle on the next morning's run. That is why a
-      just-flipped evening board shows yesterday's results as partial.</li>
+      <li>The 7:00 PM AZ refresh is an hour earlier than it used to be, so more games
+      — not just East-coast night games and late West-coast starts, but some
+      still-in-progress games generally — are unsettled at flip time and finish
+      reconciling on the next morning's run. That is why a just-flipped evening board
+      shows yesterday's results as partial, more often than before.</li>
       <li>CLV is only measured when a closing line is entered manually.</li>
       <li>Capper tracking is best-effort scraping of public mirrors — gaps happen and
       are shown as source-health warnings, not silently filled.</li>

@@ -20,8 +20,8 @@ ODDS_PROPS_MARKET = "pitcher_strikeouts"
 # Credit budget: props cost 1/event (~14 games/day ≈ 430/mo); game lines cost 2/call.
 # Both fetch once daily on the 8:00 AM AZ run (15:00 UTC), gated by UTC hour in
 # auto mode. Only the WINDOW FLOOR matters: the first run at/after it that has
-# not fetched today does the pull, so a delayed run still self-heals. The 8:00
-# PM AZ rollover run lands at 03:00 UTC — below the floor — so it never spends
+# not fetched today does the pull, so a delayed run still self-heals. The 7:00
+# PM AZ rollover run lands at 02:00 UTC — below the floor — so it never spends
 # credits on a board it just rolled forward.
 ODDS_MODE = os.environ.get("KPROJ_ODDS_MODE", "auto")       # auto|both|gamelines|props|off
 ODDS_GAMELINE_HOURS_UTC = {int(h) for h in os.environ.get("KPROJ_GAMELINE_HOURS_UTC", "15,16").split(",")}
@@ -87,7 +87,7 @@ ET_ZONE = "America/New_York"
 # to the next day at BOARD_ROLLOVER_HOUR, local to BOARD_ZONE (Arizona, UTC-7
 # year-round, no DST). util.board_date() is the single source of truth.
 BOARD_ZONE = os.environ.get("KPROJ_BOARD_ZONE", "America/Phoenix")
-BOARD_ROLLOVER_HOUR = int(os.environ.get("KPROJ_BOARD_ROLLOVER_HOUR", "20"))   # 8 PM AZ
+BOARD_ROLLOVER_HOUR = int(os.environ.get("KPROJ_BOARD_ROLLOVER_HOUR", "19"))   # 7 PM AZ
 
 # --- Signals page (validation vs cappers / market / FanGraphs) ---
 # X/Twitter capper accounts tracked on the Signals page. Scraping X itself

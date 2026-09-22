@@ -13,7 +13,7 @@ seconds.
 
 | Cron (UTC) | Arizona | What the run does |
 |---|---|---|
-| `0 3 * * *`  | 8:00 PM | Settle tonight, roll the board to tomorrow |
+| `0 2 * * *`  | 7:00 PM | Settle tonight, roll the board to tomorrow |
 | `0 15 * * *` | 8:00 AM | Game lines + K props, settle late finals |
 | `0 22 * * *` | 3:00 PM | Pre-slate refresh + line-movement re-pull |
 
@@ -53,7 +53,7 @@ Secrets are write-only — nobody can read them back out of the dashboard, which
 is the whole reason the token lives here instead of in the site's JavaScript.
 
 **4. Add the schedule.** Worker → **Settings** → **Triggers** → **Cron
-Triggers** → add `0 3 * * *`, `0 15 * * *`, `0 22 * * *`.
+Triggers** → add `0 2 * * *`, `0 15 * * *`, `0 22 * * *`.
 
 **5. Test it.** Open `https://kboard-scheduler.<your-subdomain>.workers.dev/`
 — it should list the three slots and `token_configured: true`. Then hit
@@ -62,7 +62,7 @@ Triggers** → add `0 3 * * *`, `0 15 * * *`, `0 22 * * *`.
 
 ## Checking it later
 
-- The run name in Actions tells you what fired it: `8:00 PM AZ · roll to
+- The run name in Actions tells you what fired it: `7:00 PM AZ · roll to
   tomorrow` came from the Worker, `GitHub cron backstop` did not.
 - Worker → **Logs** shows each dispatch and GitHub's response code.
 - A `401` means the token expired or was revoked — redo step 1 and update the

@@ -91,7 +91,7 @@ def cmd_daily(_args) -> None:
     from .model.predict import project_date
     from .results.reconcile import reconcile_date
 
-    # The board rolls forward at 8 PM AZ (config.BOARD_ROLLOVER_HOUR), so the
+    # The board rolls forward at 7 PM AZ (config.BOARD_ROLLOVER_HOUR), so the
     # evening run projects TOMORROW and settles the slate that just finished.
     today, yday = util.board_date(), util.board_prev_date()
     with db.session() as con:

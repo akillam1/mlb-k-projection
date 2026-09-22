@@ -15,7 +15,7 @@
  */
 
 const SLOTS = {
-  '0 3 * * *':  '8:00 PM AZ · roll to tomorrow',
+  '0 2 * * *':  '7:00 PM AZ · roll to tomorrow',
   '0 15 * * *': '8:00 AM AZ · lines + settle',
   '0 22 * * *': '3:00 PM AZ · pre-slate',
 };

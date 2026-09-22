@@ -111,10 +111,10 @@ def _capper_boards(con, date_s: str) -> tuple[dict, list, list]:
 
 def export(con) -> None:
     today = _load_site_json("today.json") or {}
-    # Follow the published board rather than the clock. Between the 03:00 UTC
+    # Follow the published board rather than the clock. Between the 02:00 UTC
     # rollover and the moment the daily run finishes, board_date() is already
     # tomorrow while today.json still holds tonight's slate — and hourly.yml
-    # fires at 03:25, right inside that gap. Labelling tonight's starters with
+    # fires at 02:25, right inside that gap. Labelling tonight's starters with
     # tomorrow's date empties every lineup, pick and FG lookup.
     date_s = today.get("date") or util.iso(util.board_date())
     meta = _load_site_json("meta.json") or {}

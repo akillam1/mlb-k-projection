@@ -5,7 +5,7 @@ compatibility_date = "2026-01-01"
 # Arizona is UTC-7 year round, so these never need DST adjustment.
 [triggers]
 crons = [
-  "0 3 * * *",    # 8:00 PM AZ — roll the board to tomorrow
+  "0 2 * * *",    # 7:00 PM AZ — roll the board to tomorrow
   "0 15 * * *",   # 8:00 AM AZ — game lines + K props + settle last night
   "0 22 * * *",   # 3:00 PM AZ — pre-slate refresh + line movement
 ]

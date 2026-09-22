@@ -76,13 +76,13 @@ const stamp = (d) => new RealDate(d).toISOString().replace(/\.\d+Z$/, 'Z');
 
 (async () => {
   // ---- slot maths -----------------------------------------------------------
-  console.log('next-update countdown (daily slots 03:00 / 15:00 / 22:00 UTC):');
+  console.log('next-update countdown (daily slots 02:00 / 15:00 / 22:00 UTC):');
   const expect = [
     ['2026-08-02T09:30:00Z', '15:00'],   // mid-morning -> 8 AM AZ slot
     ['2026-08-02T15:00:00Z', '22:00'],   // exactly on a slot -> the next one
-    ['2026-08-02T22:30:00Z', '03:00'],   // after 3 PM AZ -> tonight's rollover
-    ['2026-08-31T23:00:00Z', '03:00'],   // month boundary
-    ['2026-12-31T23:30:00Z', '03:00'],   // year boundary
+    ['2026-08-02T22:30:00Z', '02:00'],   // after 3 PM AZ -> tonight's rollover
+    ['2026-08-31T23:00:00Z', '02:00'],   // month boundary
+    ['2026-12-31T23:30:00Z', '02:00'],   // year boundary
   ];
   for (const [now, wantUTC] of expect) {
     const h = harness({ now, payload: { generated_at: stamp(now) } });

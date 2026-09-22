@@ -16,7 +16,7 @@ small scheduled jobs and host simple websites for free.
 **What you'll have when setup is done:**
 
 - A website like `https://yourname.github.io/mlb-k-projection/` — bookmark it on your phone.
-- It refreshes itself on a fixed clock: **8:00 PM, 8:00 AM and 3:00 PM Arizona**.
+- It refreshes itself on a fixed clock: **7:00 PM, 8:00 AM and 3:00 PM Arizona**.
   The header always says when it last updated and when the next one lands.
 - K prop lines pull automatically from the books once a day. You can still
   type lines in from your phone (manual_lines.csv) to add books, update stale
@@ -24,20 +24,23 @@ small scheduled jobs and host simple websites for free.
 
 ## How it works, in plain words
 
-GitHub's computers wake up on a fixed clock. **8:00 PM Arizona** — after most
-games have finished — they score the completed slate against what the model
-predicted, then flip the board to TOMORROW. **8:00 AM** they pull the day's
-betting lines and K props from the books and settle any late West-coast games.
-**3:00 PM** is the pre-slate refresh: firmed-up lineups plus a line-movement
-re-pull on the biggest-edge games. Once a week they re-train the model on
-everything seen so far.
+GitHub's computers wake up on a fixed clock. **7:00 PM Arizona** — most games
+are done or well into their final innings by then — they score the completed
+slate against what the model predicted, then flip the board to TOMORROW.
+**8:00 AM** they pull the day's betting lines and K props from the books and
+settle any late West-coast games. **3:00 PM** is the pre-slate refresh:
+firmed-up lineups plus a line-movement re-pull on the biggest-edge games. Once
+a week they re-train the model on everything seen so far.
 
-Those three times are fired by a tiny free Cloudflare Worker
-(`infra/cloudflare-worker/`) rather than by GitHub's own scheduler, which is
-best-effort and on this repo has run **1 to 3.5 hours late**. GitHub's crons are
-kept as a backstop in case the Worker ever stops; a backstop run that finds the
-data already fresh exits in seconds. Every prediction is saved before games start and every
-result is checked — wins, losses, and all. None of it runs on your computer.
+Those three times can be fired on the minute by a tiny free Cloudflare Worker
+(`infra/cloudflare-worker/`), if you set one up. Without it, GitHub's own
+scheduler runs the show — it's best-effort and can run late, so `daily.yml`
+checks in every 15 minutes inside each target window rather than just once,
+catching and republishing stale data quickly instead of waiting for the next
+sparse slot. A check-in that finds the data already fresh exits in ~15
+seconds, so this costs nothing extra. Every prediction is saved before games
+start and every result is checked — wins, losses, and all. None of it runs on
+your computer.
 
 ```mermaid
 flowchart LR
@@ -244,13 +247,12 @@ beats fake.) If you have the Worker deployed with a `PING_KEY`, visiting
 
 | When (AZ) | What |
 |---|---|
-| **8:00 PM** | Score the finished slate, settle picks, **flip the board to tomorrow** |
-| **8:00 AM** | Game lines + K props from the books, settle late West-coast games, fresh projections |
-| ~12:00 PM | Backstop-only bonus run: lineups firm up (GitHub cron, so the time drifts) |
+| **7:00 PM** | Score the finished slate, settle picks, **flip the board to tomorrow** |
+| **8:00 AM – ~1 PM** | Game lines + K props from the books, settle late West-coast games, fresh projections; lineups firm up as they're announced through this window |
 | **3:00 PM** | Pre-slate refresh + line-movement re-pull on the top-edge games |
 | Overnight Sunday | Re-train model on all data so far |
 
-The board rolls to the next day at 8:00 PM AZ (`KPROJ_BOARD_ROLLOVER_HOUR`) — a
+The board rolls to the next day at 7:00 PM AZ (`KPROJ_BOARD_ROLLOVER_HOUR`) — a
 property of the code, not of when the job happens to start. A run that fires
 late still produces the right day.
 
@@ -274,11 +276,11 @@ the main database.
   The workflow log (Actions → latest "Rescore" run) prints a warning naming any
   line it couldn't match.
 - **The site updated at the wrong time** → check the run name in Actions.
-  `8:00 PM AZ · roll to tomorrow` means the Cloudflare Worker fired it on
-  schedule. `GitHub cron backstop` means the Worker did not, and GitHub's own
-  (late, unpredictable) scheduler picked it up — look at the Worker's logs and
-  whether its `GH_TOKEN` has expired. The board still shows the right *day*
-  either way; only the timing slips.
+  `7:00 PM AZ · roll to tomorrow` means the Cloudflare Worker fired it on
+  schedule. `GitHub cron backstop` means the dense backstop schedule in
+  `daily.yml` caught it instead — normal if you haven't set up the Worker, and
+  it should still land within about 15 minutes of a slot. The board still
+  shows the right *day* either way; only the timing slips.
 - **Email from GitHub: "scheduled workflows disabled"** → happens if the repo
   sees no activity for ~60 days (e.g. over the offseason). Click the re-enable
   button in the email or Actions tab. Harmless.

@@ -27,8 +27,8 @@ CASES = [
     ("2026-08-02T07:00:00Z", "2026-08-02", "12:00 AM AZ — still today's board"),
     ("2026-08-02T15:00:00Z", "2026-08-02", "8:00 AM AZ slot"),
     ("2026-08-02T22:00:00Z", "2026-08-02", "3:00 PM AZ slot"),
-    ("2026-08-03T02:59:00Z", "2026-08-02", "7:59 PM AZ — one minute before rollover"),
-    ("2026-08-03T03:00:00Z", "2026-08-03", "8:00 PM AZ slot — rolls to tomorrow"),
+    ("2026-08-03T01:59:00Z", "2026-08-02", "6:59 PM AZ — one minute before rollover"),
+    ("2026-08-03T02:00:00Z", "2026-08-03", "7:00 PM AZ slot — rolls to tomorrow"),
     ("2026-08-03T04:10:00Z", "2026-08-03", "9:10 PM AZ — the old cron, same answer"),
     ("2026-08-03T06:37:00Z", "2026-08-03", "11:37 PM AZ — a badly delayed run"),
     ("2026-08-03T08:30:00Z", "2026-08-03", "1:30 AM AZ — after local midnight"),
@@ -95,7 +95,7 @@ def check_odds_window() -> int:
         ("2026-08-03T18:30:00Z", "2026-08-03", True,  "delayed morning run self-heals"),
         ("2026-08-03T22:00:00Z", "2026-08-03", True,  "3:00 PM AZ run, morning was missed"),
         ("2026-08-04T00:30:00Z", "2026-08-03", True,  "past midnight UTC, board is still Aug 3"),
-        ("2026-08-04T02:55:00Z", "2026-08-03", True,  "7:55 PM AZ, minutes before rollover"),
+        ("2026-08-04T01:55:00Z", "2026-08-03", True,  "6:55 PM AZ, minutes before rollover"),
     ]
     bad = 0
     for iso, board, want, note in cases:
@@ -105,7 +105,7 @@ def check_odds_window() -> int:
         bad += not ok
         print(f"  {'ok ' if ok else 'FAIL'} {iso} board={board} -> fetch={got}  {note}")
     # and the board that a run at that instant would actually be working on
-    for iso in ("2026-08-04T00:30:00Z", "2026-08-04T02:55:00Z"):
+    for iso in ("2026-08-04T00:30:00Z", "2026-08-04T01:55:00Z"):
         now = dt.datetime.fromisoformat(iso.replace("Z", "+00:00"))
         b = util.board_date(now)
         ok = util.iso(b) == "2026-08-03"
@@ -137,8 +137,8 @@ def check_gate_wired() -> int:
         ("!=" in wf["jobs"]["daily"]["if"] and "'false'" in wf["jobs"]["daily"]["if"],
          "daily job fails OPEN on a broken gate"),
         (sorted(c["cron"] for c in triggers["schedule"]) ==
-         ["7 15 * * *", "7 19 * * *", "7 22 * * *", "7 3 * * *"],
-         "backstop crons sit just after each target slot"),
+         ["7-59/15 0-4 * * *", "7-59/15 15-19 * * *", "7-59/15 22-23 * * *"],
+         "dense backstop windows cover the odds/lineup, pre-slate, and rollover hours"),
     ]
     for ok, note in checks:
         bad += not ok

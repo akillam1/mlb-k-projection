@@ -4,43 +4,46 @@ run-name: "Daily refresh — ${{ inputs.slot || 'GitHub cron backstop' }}"
 # ---------------------------------------------------------------------------
 # TIMING (Arizona = UTC-7 all year, no DST)
 #
-#   8:00 PM AZ / 03:00 UTC — roll the board to TOMORROW, settle tonight's
+#   7:00 PM AZ / 02:00 UTC — roll the board to TOMORROW, settle tonight's
 #                            finished games. No odds credits spent.
 #   8:00 AM AZ / 15:00 UTC — morning refresh: game lines + K props for today,
 #                            plus any late West-coast finals from last night.
 #   3:00 PM AZ / 22:00 UTC — pre-slate refresh + top-edge line-movement re-pull.
 #
 # HOW THE TIMES ARE ACTUALLY HIT
-# GitHub's hosted cron is best-effort and, on this repo, has run 1h-3.5h late
-# (see the run history — 04:10 UTC crons starting at 06:37). Nothing inside
-# GitHub fixes that, so the three times above are fired by an external
-# Cloudflare Worker (free tier) that calls workflow_dispatch on the minute:
-# infra/cloudflare-worker/. The crons below are a BACKSTOP for a Worker
-# outage — deliberately scheduled just after each target so that, whenever
-# GitHub gets around to them, the board is still correct.
+# GitHub's hosted cron is best-effort and, on this repo, has run several hours
+# late (see the run history), and a single sparse daily check-in per slot means
+# a late scheduler run waits for the NEXT slot to catch up — which is why the
+# board used to publish around 10-11 PM instead of the intended time. There is
+# no Cloudflare Worker wired up to fire on-the-minute right now (see
+# infra/cloudflare-worker/, currently dormant), so the schedule below is dense
+# on purpose: every 15 minutes across each target window, so that whenever
+# GitHub gets around to running the cron, the gap between "went stale" and
+# "caught and republished" stays small.
 #
-# The `gate` job drops a backstop run whose data is already fresh (< 2h), so
-# the normal case is: Worker runs the pipeline, backstop no-ops in ~15s. It
-# fails open — only an explicit "fresh" verdict stops the pipeline.
+# The `gate` job drops a run whose data is already fresh (< 2h), so almost
+# every one of these dense check-ins is a ~15s no-op — only the first one
+# after data goes stale actually runs the pipeline. It fails open — only an
+# explicit "fresh" verdict stops the pipeline. Odds credits are unaffected:
+# every odds fetch is separately gated by day + UTC window + a once-per-day
+# KV flag (kproj/cli.py cmd_daily), so running the gate more often does not
+# fetch odds more often.
 #
 # Odds budget (500 free credits/mo): game lines 2/day + props ~14/day + the
 # top-edge movement re-pull ~3/day ≈ 19/day ≈ 590 raw, over the free tier. Every
 # call goes through budget_ok() (kproj/ingest/odds.py), which stops spending at
 # ODDS_BUDGET_FLOOR — late in the month the movement re-pull bows out first and
 # projections are never affected.
-# The 19:07 UTC backstop has no Worker counterpart (Cloudflare's free plan
-# caps cron triggers) — it lands early afternoon AZ as a bonus lineup refresh.
 #
 # The board no longer depends on when this runs: util.board_date() rolls the
-# slate at 8 PM AZ regardless of when the job actually starts.
+# slate at 7 PM AZ regardless of when the job actually starts.
 # ---------------------------------------------------------------------------
 
 on:
   schedule:
-    - cron: "7 3 * * *"     # backstop — 8:07 PM AZ (rollover)
-    - cron: "7 15 * * *"    # backstop — 8:07 AM AZ (odds)
-    - cron: "7 19 * * *"    # backstop — 12:07 PM AZ (lineups; no Worker slot)
-    - cron: "7 22 * * *"    # backstop — 3:07 PM AZ (line movement)
+    - cron: "7-59/15 15-19 * * *"   # dense backstop — 8:07 AM to 12:52 PM AZ (odds + lineup window)
+    - cron: "7-59/15 22-23 * * *"   # dense backstop — 3:07 PM to 4:52 PM AZ (pre-slate window)
+    - cron: "7-59/15 0-4 * * *"     # dense backstop — 5:07 PM to 9:52 PM AZ (rollover window)
   workflow_dispatch:
     inputs:
       slot:
