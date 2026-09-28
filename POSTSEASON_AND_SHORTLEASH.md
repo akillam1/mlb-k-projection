@@ -154,12 +154,28 @@ Built on top of the mandatory fix's `game_type` plumbing:
 
 ## 6. Suggested build order
 
-1. In-house team "quick hook" prior from existing `pitcher_game_logs` data
-   (no new dependency, immediately available).
-2. Postseason BF multiplier (stopgap, inference-time only) — cheap, evidence-
-   backed, ready for this postseason.
+1. **DONE, pushed Sept 28, 2026.** In-house team "quick hook" prior
+   (`team_leash_bf` in `kproj/features/store.py`) from existing
+   `pitcher_game_logs` data — no new dependency. Verified against synthetic
+   short-/long-leash team histories. Wiring this in also surfaced a real
+   deploy-ordering bug (retrain is weekly, projection is daily, so adding any
+   feature would crash every projection against the still-active older model
+   until the next retrain caught up) — fixed by having `load_active()` return
+   each model's own trained feature list and having `predict.py` build its
+   vector from that instead of from live `FEATURE_COLUMNS`.
+2. **DONE, pushed Sept 28, 2026.** Postseason BF multiplier
+   (`config.POSTSEASON_BF_MULTIPLIER = 4.35/5.19`, applied in
+   `predict_distribution()`/`project_date()` in `kproj/model/predict.py`),
+   gated on `game_type in config.POSTSEASON_GAME_TYPES`. Inference-time only —
+   training is untouched — and scales the whole predicted distribution
+   (point + all quantiles) down uniformly, preserving monotonicity, rather
+   than adjusting any K-rate/quality input. Verified the gating logic (R →
+   1.0, postseason game types → the multiplier, NULL/pre-migration → 1.0) and
+   the scaling math (point re-floored at 0.05, quantile order preserved)
+   directly; full smoke test (train → project → score → reconcile) still
+   passes end to end.
 3. `workload_news.py` scrape + LLM extraction + line-movement corroboration —
    the highest-effort piece, and the one with the least reliable upside
    (soft/qualitative signals, fragile scraping), so it should come last and
    ship as a best-effort *flag on the board*, not a silent model input, until
-   its precision is proven out over a season.
+   its precision is proven out over a season. Not yet started.

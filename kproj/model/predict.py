@@ -12,7 +12,13 @@ from ..features.store import FeatureStore
 from .train import load_active
 
 
-def predict_distribution(models: dict, vector: list) -> dict:
+def predict_distribution(models: dict, vector: list, bf_multiplier: float = 1.0) -> dict:
+    """bf_multiplier: the stopgap postseason scale-down (config.POSTSEASON_
+    BF_MULTIPLIER), applied here — after the model's own prediction, never as
+    a training-time adjustment — because there's no trained postseason model
+    to reach for yet. Uniform positive scaling can't invert the quantile
+    order, so monotonicity survives; only the point floor needs re-clipping.
+    """
     X = np.array([vector], dtype=float)
     point = float(np.clip(models["point"].predict(X)[0], 0.05, None))
     qs = {}
@@ -21,7 +27,11 @@ def predict_distribution(models: dict, vector: list) -> dict:
     # enforce monotone quantiles
     vals = [qs[q] for q in config.QUANTILES]
     vals = list(np.maximum.accumulate(vals))
-    return {"point": point, **{f"p{int(q * 100)}": v for q, v in zip(config.QUANTILES, vals)}}
+    dist = {"point": point, **{f"p{int(q * 100)}": v for q, v in zip(config.QUANTILES, vals)}}
+    if bf_multiplier != 1.0:
+        dist = {k: v * bf_multiplier for k, v in dist.items()}
+        dist["point"] = max(dist["point"], 0.05)
+    return dist
 
 
 def _cdf(dist: dict) -> PchipInterpolator:
@@ -92,7 +102,8 @@ def project_date(con, d, progress=print) -> int:
         except Exception as e:  # noqa: BLE001 — one bad starter shouldn't kill the slate
             progress(f"[project] {r['pitcher_name']}: {e}")
             continue
-        dist = predict_distribution(models, vector)
+        bf_mult = config.POSTSEASON_BF_MULTIPLIER if game.get("game_type") in config.POSTSEASON_GAME_TYPES else 1.0
+        dist = predict_distribution(models, vector, bf_mult)
         con.execute(
             "UPDATE projections SET is_latest=0 WHERE game_pk=? AND pitcher_id=?",
             (r["game_pk"], r["pitcher_id"]),

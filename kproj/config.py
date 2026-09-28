@@ -100,6 +100,22 @@ INCLUDE_POSTSEASON = os.environ.get("KPROJ_INCLUDE_POSTSEASON", "1").lower() not
     "0", "false", "no", "off",
 )
 
+# Stopgap postseason adjustment (§5, POSTSEASON_AND_SHORTLEASH.md). There is
+# zero real postseason training data yet, and one or two Octobers' worth
+# isn't enough to train a dedicated postseason model — so instead of
+# retraining on a handful of rows, scale the predicted K distribution at
+# INFERENCE TIME ONLY (never training — see kproj/features/build.py) by the
+# measured postseason batters-faced/innings reduction: FanGraphs 2025 puts
+# postseason starts at ~4.35 IP vs ~5.19 IP in the regular season, a pure
+# quantity effect (fully-rested, high-leverage bullpens pull starters
+# earlier) with no measured per-inning quality decline (FIP is flat at
+# ~3.64 either way). That's why this scales the whole output distribution
+# down rather than adjusting any K-rate/quality input feature — it's
+# modeling fewer opportunities, not worse stuff. Revisit with a real trained
+# adjustment once enough postseason starts accumulate across multiple
+# Octobers.
+POSTSEASON_BF_MULTIPLIER = 4.35 / 5.19
+
 ET_ZONE = "America/New_York"
 
 # --- Board clock -------------------------------------------------------------
