@@ -52,6 +52,27 @@ class FeatureStore:
                     ("di", "game_pk", "bf", "k", "bb", "pitches", "called_strikes", "whiffs", "fb_velo")
                 }
 
+        # ---- team "quick hook" prior: recency-weighted starter BF per team,
+        # from the team's own history of started=1 rows (see team_leash_bf()
+        # below). This is deliberately team-level, not pitcher-level — it's a
+        # proxy for managerial/bullpen-depth tendency (how long a team's
+        # starters typically go before the pen takes over), independent of
+        # who's on the mound tonight. See POSTSEASON_AND_SHORTLEASH.md §4/§6:
+        # first piece of the short-leash design, computed entirely from data
+        # we already ingest (no new dependency).
+        team_starts = pd.read_sql_query(
+            "SELECT team, date, bf FROM pitcher_game_logs WHERE started=1 ORDER BY team, date",
+            con,
+        )
+        self.team_starter_bf = {}
+        if not team_starts.empty:
+            team_starts["di"] = _d2i(team_starts["date"])
+            for team, g in team_starts.groupby("team", sort=False):
+                self.team_starter_bf[team] = {
+                    "di": g["di"].to_numpy(),
+                    "bf": g["bf"].to_numpy(),
+                }
+
         # ---- pitcher season/yearly BF+K for priors (all appearances)
         yearly = pd.read_sql_query(
             """SELECT pitcher_id, substr(date,1,4) AS yr, SUM(bf) bf, SUM(k) k
@@ -258,6 +279,27 @@ class FeatureStore:
             return self.lg_k
         sh = config.BATTER_SHRINK_PA * 9
         return float((k + sh * self.lg_k) / (pa + sh))
+
+    def team_leash_bf(self, team: str, as_of: date) -> float:
+        """Team 'quick hook' prior: recency-weighted average batters faced by
+        that team's OWN starters (not the opponent's), strictly before as_of.
+        Lower = the team tends to pull starters earlier (shorter leash);
+        higher = starters typically go deeper. Half-life is longer than the
+        per-pitcher EWMA (15 starts vs 5) because this is meant to track
+        managerial/bullpen-depth tendency, which is slower-moving than any one
+        pitcher's form. Falls back to the league-average BF/start when the
+        team has no starts on record yet (early in a fresh DB)."""
+        a = self.team_starter_bf.get(team)
+        if a is None:
+            return self.lg_bf
+        di = _di(as_of)
+        idx = np.where(a["di"] < di)[0][-20:]
+        if not len(idx):
+            return self.lg_bf
+        order = idx[::-1]  # most recent first
+        w = 0.5 ** (np.arange(len(order)) / 15.0)
+        bf = a["bf"][order].astype(float)
+        return float(np.sum(w * bf) / np.sum(w))
 
     def opponent_features(
         self, opp_team: str, hand: str, as_of: date,

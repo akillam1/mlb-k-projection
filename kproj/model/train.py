@@ -94,14 +94,28 @@ def train(con, quick=False, progress=print) -> dict | None:
 
 def load_active(con) -> dict | None:
     row = con.execute(
-        "SELECT version FROM model_registry WHERE active=1 ORDER BY trained_at DESC LIMIT 1"
+        "SELECT version, params_json FROM model_registry WHERE active=1 ORDER BY trained_at DESC LIMIT 1"
     ).fetchone()
     if not row:
         return None
     version = row["version"]
+    # The feature LIST a model was actually trained with, not FEATURE_COLUMNS
+    # as it reads today. Retraining is weekly (retrain.yml) but projection is
+    # daily (daily.yml) — they're decoupled — so a feature added to build.py
+    # between retrains must not change what gets fed to a model trained
+    # before that add, or a length/order mismatch would crash every
+    # projection until the next retrain happens to catch up. Old rows (before
+    # params_json carried "features") fall back to the live FEATURE_COLUMNS,
+    # which is what they were actually trained with anyway.
+    try:
+        features = json.loads(row["params_json"])["features"]
+    except (TypeError, KeyError, ValueError):
+        from ..features.build import FEATURE_COLUMNS
+        features = FEATURE_COLUMNS
     try:
         bundle = {
             "version": version,
+            "features": features,
             "point": lgb.Booster(model_file=str(config.MODELS_DIR / f"{version}_point.txt")),
             "quantiles": {
                 q: lgb.Booster(model_file=str(config.MODELS_DIR / f"{version}_q{int(q * 100)}.txt"))

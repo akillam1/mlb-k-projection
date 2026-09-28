@@ -84,10 +84,15 @@ def project_date(con, d, progress=print) -> int:
         game = dict(r)
         try:
             lf = live_feature_row(con, store, game, r["pitcher_id"], r["p_team"])
+            # Build the vector from THIS model's own trained feature list
+            # (models["features"], from model_registry), not live_feature_row's
+            # "vector" (today's FEATURE_COLUMNS) — those two only agree right
+            # after a retrain. See load_active() for why.
+            vector = [lf["features"][c] for c in models["features"]]
         except Exception as e:  # noqa: BLE001 — one bad starter shouldn't kill the slate
             progress(f"[project] {r['pitcher_name']}: {e}")
             continue
-        dist = predict_distribution(models, lf["vector"])
+        dist = predict_distribution(models, vector)
         con.execute(
             "UPDATE projections SET is_latest=0 WHERE game_pk=? AND pitcher_id=?",
             (r["game_pk"], r["pitcher_id"]),

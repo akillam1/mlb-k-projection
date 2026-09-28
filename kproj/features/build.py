@@ -12,7 +12,7 @@ FEATURE_COLUMNS = [
     "blended_k_pct", "k_pct_ewma", "csw_ewma", "swstr_ewma", "kbb_pct_ewma",
     "prior_k_pct", "stab_weight", "fb_velo_delta", "bf_avg3", "days_rest",
     "opp_k_pct", "lineup_confidence", "park_k_factor", "ump_factor",
-    "temp_f", "wind_mph", "is_home", "run_env", "month",
+    "temp_f", "wind_mph", "is_home", "run_env", "month", "team_leash_bf",
 ]
 
 
@@ -95,13 +95,14 @@ def training_frame(con, store: FeatureStore, augment=True, seed=42):
         park = store.park_features(s["venue_name"])
         temp, wind = _weather_fill(s["temp_f"], s["wind_mph"], park["roof_type"])
         ump = store.ump_factor(s["ump_name"]) if rng.random() > 0.3 else 1.0  # dropout
+        team_leash = store.team_leash_bf(s["team"], d)
 
         X_rows.append([
             pf["blended_k_pct"], pf["k_pct_ewma"], pf["csw_ewma"], pf["swstr_ewma"],
             pf["kbb_pct_ewma"], pf["prior_k_pct"], pf["stab_weight"], pf["fb_velo_delta"],
             pf["bf_avg3"], pf["days_rest"], opp_k, conf, park["park_k_factor"], ump,
             temp, wind, int(s["is_home"]), store.run_environment(s["home_team"], s["away_team"], d),
-            d.month,
+            d.month, team_leash,
         ])
         y.append(int(s["k"]))
         meta.append((s["game_pk"], s["pitcher_id"], s["date"]))
@@ -140,6 +141,7 @@ def live_feature_row(con, store: FeatureStore, game, pitcher_id: int, team: str)
         "ump_factor": store.ump_factor(game["ump_name"]),
         "temp_f": temp, "wind_mph": wind, "is_home": is_home,
         "run_env": run_env, "month": d.month,
+        "team_leash_bf": store.team_leash_bf(team, d),
     }
     return {
         "features": feats,
