@@ -117,14 +117,13 @@ function bestScore(s) {
   return pos.length ? Math.max(...pos.map(probEdge)) : -1;
 }
 
-/* Short lineup note, folded into the pitcher cell's subtext rather than its
-   own column — the confidence number mattered less than knowing at a glance
-   whether it's a real lineup yet, so a colored word does that job in less space. */
-function lineupNote(conf, tier) {
-  const cls = conf >= 0.95 ? "lu-high" : conf >= 0.5 ? "lu-mid" : "lu-low";
-  const label = { confirmed: "lineup confirmed", actual: "lineup confirmed",
-    common7d: "projected lineup", team_agg: "team-avg lineup" }[tier] || "lineup unknown";
-  return `<span class="${cls}">${label}</span>`;
+/* Last-5 K form line, folded into the pitcher cell's subtext — Robin doesn't
+   need the lineup-confirmed note in the table anymore, but wants a quick
+   trending-up/down read on the pitcher himself. Oldest to newest, left to
+   right. */
+function last5Note(last5) {
+  if (!last5 || !last5.length) return "";
+  return `<div class="l5">Last 5 K: <span class="l5-nums">${last5.join(" · ")}</span></div>`;
 }
 
 /* ---------------- Table view: same slate, one sortable row per starter ---------------- */
@@ -168,12 +167,12 @@ function tableRow(s) {
   const p = s.proj;
   const meta = `${esc(s.team)} ${s.home ? "vs" : "@"} ${esc(s.opp)} · ${esc(s.time_et)}`;
   if (!p) {
-    const nameCell = `<div class="pn">${esc(s.pitcher)}</div><div class="pm">${meta}</div>`;
+    const nameCell = `<div class="pn">${esc(s.pitcher)}</div><div class="pm">${meta}</div>${last5Note(s.last5_k)}`;
     return `<tr><td>${nameCell}</td><td class="dim">No projection yet</td>
       <td class="num">${lineCell(s)}</td></tr>`;
   }
   const nameCell = `<div class="pn">${esc(s.pitcher)}</div>
-    <div class="pm">${meta} · ${lineupNote(p.lineup_confidence, p.lineup_tier)}</div>`;
+    <div class="pm">${meta}</div>${last5Note(s.last5_k)}`;
   const projCls = lineEdgeClass(p.point, s.k_line ? s.k_line.line : null);
   return `<tr data-hasedge="${(s.edges || []).some((e) => e.ev_per_unit > 0)}">
     <td>${nameCell}</td>

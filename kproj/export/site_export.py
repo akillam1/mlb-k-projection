@@ -72,6 +72,7 @@ def export_today(con, d) -> None:
             "wind_mph": r["wind_mph"],
             "odds": odds_cache[pk],
             "k_line": _k_line_summary(con, date_s, r["pitcher_id"]),
+            "last5_k": _last5_k(con, r["pitcher_id"], date_s),
         }
         if r["proj_id"]:
             tier = "?"
@@ -90,6 +91,20 @@ def export_today(con, d) -> None:
             })
         starters.append(entry)
     _write("today.json", {"date": date_s, "generated_at": db.utcnow(), "starters": starters})
+
+
+def _last5_k(con, pitcher_id: int, before_date: str) -> list:
+    """Strikeout totals from the pitcher's 5 most recent actual starts before
+    today's slate, oldest to newest (left-to-right, matching how a form
+    guide reads) — the quick "is he trending up or down" glance Robin wants
+    under the pitcher's name instead of the lineup-confirmed note."""
+    rows = con.execute(
+        """SELECT k FROM pitcher_game_logs
+           WHERE pitcher_id=? AND started=1 AND date<? AND k IS NOT NULL
+           ORDER BY date DESC LIMIT 5""",
+        (pitcher_id, before_date),
+    ).fetchall()
+    return [r["k"] for r in reversed(rows)]
 
 
 def _k_line_summary(con, date_s: str, pitcher_id: int) -> dict | None:

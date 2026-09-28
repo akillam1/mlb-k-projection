@@ -101,6 +101,8 @@ footer.site { color: var(--dim); font-size: 11.5px; line-height: 1.6; margin-top
 .board-tbl td { vertical-align: middle; }
 .board-tbl td .pn { font-weight: 600; white-space: nowrap; }
 .board-tbl td .pm { color: var(--dim); font-size: 11px; margin-top: 1px; white-space: nowrap; }
+.board-tbl td .l5 { color: var(--dim); font-size: 10.5px; margin-top: 1px; white-space: nowrap; }
+.board-tbl td .l5 .l5-nums { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
 /* Proj K is the reason this table exists — biggest, boldest number in it. */
 .board-tbl td .proj { font-weight: 800; font-size: 21px; }
 .board-tbl th[data-key="proj"] { color: var(--text); }
@@ -115,9 +117,6 @@ footer.site { color: var(--dim); font-size: 11.5px; line-height: 1.6; margin-top
   border-radius: 0 12px 12px 0; }
 @media (min-width: 640px) { .board-tbl-wrap::after { display: none; } }
 @media (max-width: 480px) { .board-tbl-wrap::after { display: none; } }
-
-/* Lineup status, folded into the pitcher cell's subtext instead of its own column. */
-.lu-high { color: var(--green); } .lu-mid { color: var(--gold); } .lu-low { color: var(--red); }
 
 /* Signals page */
 .win { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 6px;
