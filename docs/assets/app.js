@@ -123,7 +123,9 @@ function bestScore(s) {
    right. */
 function last5Note(last5) {
   if (!last5 || !last5.length) return "";
-  return `<div class="l5">Last 5 K: <span class="l5-nums">${last5.join(" · ")}</span></div>`;
+  const nums = last5.map((v, i) =>
+    i === last5.length - 1 ? `<span class="l5-newest">${v}</span>` : v);
+  return `<div class="l5">Last 5 K: <span class="l5-nums">${nums.join(" · ")}</span></div>`;
 }
 
 /* Best-effort short-leash/pitch-limit flag (kproj/signals/workload.py). Never
