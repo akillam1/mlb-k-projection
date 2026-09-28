@@ -26,11 +26,18 @@ def fetch_schedule(con, start, end) -> list[dict]:
             "hydrate": "probablePitcher,lineups,team",
         },
     )
+    # Regular season plus, unless explicitly disabled, the postseason game
+    # types (Wild Card / Division / Championship / World Series). Before this,
+    # the filter below was hard-coded to 'R' only, which meant the schedule
+    # fetch returned zero games for any October date — the board didn't
+    # project the postseason badly, it simply never saw those games at all.
+    allowed_types = {"R"} | (config.POSTSEASON_GAME_TYPES if config.INCLUDE_POSTSEASON else set())
     games, probables, lineups = [], [], []
     now = db.utcnow()
     for day in data.get("dates", []):
         for g in day.get("games", []):
-            if g.get("gameType") != "R":  # regular season only
+            game_type = g.get("gameType")
+            if game_type not in allowed_types:
                 continue
             pk = g["gamePk"]
             home = g["teams"]["home"]
@@ -42,6 +49,7 @@ def fetch_schedule(con, start, end) -> list[dict]:
                     "game_pk": pk,
                     "date": g.get("officialDate") or day["date"],
                     "season": int(g.get("season", day["date"][:4])),
+                    "game_type": game_type,
                     "home_team": home_abbr,
                     "away_team": away_abbr,
                     "venue_id": (g.get("venue") or {}).get("id"),

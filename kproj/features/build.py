@@ -57,11 +57,21 @@ def pitcher_hand(con, pid: int) -> str:
 def training_frame(con, store: FeatureStore, augment=True, seed=42):
     """X, y, meta for every historical start. Features are strictly as-of (no leakage)."""
     rng = np.random.default_rng(seed)
+    # Regular season only, always — regardless of config.INCLUDE_POSTSEASON.
+    # That flag controls whether the live board *shows* postseason games; it
+    # was never meant to let postseason starts into the training set. October
+    # usage is a different regime (shorter outings from a quicker hook, not
+    # worse pitching — see the postseason-mode research), so blending it into
+    # a regular-season model would bias it rather than improve it. g.game_type
+    # is NULL for rows ingested before this column existed, which were all
+    # regular season by construction (postseason wasn't ingested yet), so
+    # NULL is treated as regular season too.
     starts = con.execute(
         """SELECT l.pitcher_id, l.game_pk, l.date, l.team, l.opp, l.is_home, l.k, l.p_throws,
                   g.venue_name, g.ump_name, g.temp_f, g.wind_mph, g.home_team, g.away_team
            FROM pitcher_game_logs l JOIN games g ON g.game_pk = l.game_pk
-           WHERE l.started=1 ORDER BY l.date""",
+           WHERE l.started=1 AND (g.game_type='R' OR g.game_type IS NULL)
+           ORDER BY l.date""",
     ).fetchall()
     X_rows, y, meta = [], [], []
     for s in starts:

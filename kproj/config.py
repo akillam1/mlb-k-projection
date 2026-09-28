@@ -84,6 +84,22 @@ TRAIN_AUGMENT_DEGRADED_LINEUP = 0.25   # fraction of rows re-featured with tier-
 MIN_TRAIN_ROWS = 1500
 SEASON_START_MONTH = 3
 
+# --- Postseason ----------------------------------------------------------
+# MLB Stats API gameType codes beyond regular season ('R'): F=Wild Card,
+# D=Division Series, L=Championship Series, W=World Series. Ingestion skipped
+# all of these until Sept 2026 (mandatory fix) — the schedule fetch simply
+# returned zero games for any October date, so the board went dark for the
+# entire postseason, not just projected it badly. Training still filters to
+# regular season only (see kproj/model/train.py) — postseason usage patterns
+# are different enough that mixing them into the regular-season model would
+# bias it, not fix it; games.game_type is stored so that separation stays
+# possible everywhere downstream (features, exports, a future postseason
+# adjustment layer) without re-deriving it from the schedule each time.
+POSTSEASON_GAME_TYPES = {"F", "D", "L", "W"}
+INCLUDE_POSTSEASON = os.environ.get("KPROJ_INCLUDE_POSTSEASON", "1").lower() not in (
+    "0", "false", "no", "off",
+)
+
 ET_ZONE = "America/New_York"
 
 # --- Board clock -------------------------------------------------------------

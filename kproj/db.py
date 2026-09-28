@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS games (
     game_pk          INTEGER PRIMARY KEY,
     date             TEXT NOT NULL,          -- ET game date YYYY-MM-DD
     season           INTEGER,
+    game_type        TEXT,                   -- 'R' regular | 'F'/'D'/'L'/'W' postseason
     home_team        TEXT,
     away_team        TEXT,
     venue_id         INTEGER,
@@ -240,8 +241,19 @@ def connect(db_path=None) -> sqlite3.Connection:
     return con
 
 
+def _add_column_if_missing(con: sqlite3.Connection, table: str, col: str, decl: str) -> None:
+    """CREATE TABLE IF NOT EXISTS never alters an existing table, so a column
+    added to SCHEMA after the real DB already exists needs an explicit,
+    idempotent migration here — otherwise it silently only takes effect on a
+    brand-new database, never on the one actually running in production."""
+    cols = {r["name"] for r in con.execute(f"PRAGMA table_info({table})")}
+    if col not in cols:
+        con.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
+
+
 def init_db(con: sqlite3.Connection) -> None:
     con.executescript(SCHEMA)
+    _add_column_if_missing(con, "games", "game_type", "TEXT")
     con.commit()
 
 

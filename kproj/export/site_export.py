@@ -39,7 +39,7 @@ def export_today(con, d) -> None:
     date_s = util.iso(d) if not isinstance(d, str) else d
     rows = con.execute(
         """SELECT g.game_pk, g.date, g.home_team, g.away_team, g.first_pitch_utc, g.status,
-                  g.temp_f, g.wind_mph, g.venue_name,
+                  g.temp_f, g.wind_mph, g.venue_name, g.game_type,
                   ps.team, ps.pitcher_id, ps.pitcher_name,
                   p.id AS proj_id, p.point_est, p.p10, p.p25, p.p50, p.p75, p.p90,
                   p.lineup_confidence, p.model_version, p.generated_at, p.features_json
@@ -67,6 +67,7 @@ def export_today(con, d) -> None:
             "home": r["team"] == r["home_team"],
             "time_et": _et_time(r["first_pitch_utc"]),
             "status": r["status"],
+            "game_type": r["game_type"],
             "venue": r["venue_name"],
             "temp_f": r["temp_f"],
             "wind_mph": r["wind_mph"],
