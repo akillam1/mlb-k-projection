@@ -126,6 +126,25 @@ function last5Note(last5) {
   return `<div class="l5">Last 5 K: <span class="l5-nums">${last5.join(" · ")}</span></div>`;
 }
 
+/* Best-effort short-leash/pitch-limit flag (kproj/signals/workload.py). Never
+   a silent model input — just a note under the pitcher's name so Robin can
+   eyeball it before betting. "Corroborated" (the K line already moved the
+   way the flag suggests) gets a solid badge; "unconfirmed" (flag with no
+   matching line move — a single scraped tweet, not verified) gets a dimmer
+   one. Absent entirely — no flag scraped today — renders nothing. */
+const WORKLOAD_LABELS = {
+  pitch_limit: "Pitch limit", innings_limit: "Innings limit",
+  short_leash: "Short leash", bullpen_game: "Bullpen game",
+  return_from_injury: "Return from injury", other: "Workload note",
+};
+function workloadNote(flag) {
+  if (!flag) return "";
+  const label = WORKLOAD_LABELS[flag.flag_type] || "Workload note";
+  const cls = flag.status === "corroborated" ? "wf-confirmed" : "wf-unconfirmed";
+  const title = flag.snippet ? ` title="${esc(flag.snippet)}"` : "";
+  return `<div class="wf ${cls}"${title}>⚠ ${esc(label)}${flag.status === "unconfirmed" ? " (unconfirmed)" : ""}</div>`;
+}
+
 /* ---------------- Table view: same slate, one sortable row per starter ---------------- */
 
 const TABLE_COLS = [
@@ -167,12 +186,12 @@ function tableRow(s) {
   const p = s.proj;
   const meta = `${esc(s.team)} ${s.home ? "vs" : "@"} ${esc(s.opp)} · ${esc(s.time_et)}`;
   if (!p) {
-    const nameCell = `<div class="pn">${esc(s.pitcher)}</div><div class="pm">${meta}</div>${last5Note(s.last5_k)}`;
+    const nameCell = `<div class="pn">${esc(s.pitcher)}</div><div class="pm">${meta}</div>${last5Note(s.last5_k)}${workloadNote(s.workload_flag)}`;
     return `<tr><td>${nameCell}</td><td class="dim">No projection yet</td>
       <td class="num">${lineCell(s)}</td></tr>`;
   }
   const nameCell = `<div class="pn">${esc(s.pitcher)}</div>
-    <div class="pm">${meta}</div>${last5Note(s.last5_k)}`;
+    <div class="pm">${meta}</div>${last5Note(s.last5_k)}${workloadNote(s.workload_flag)}`;
   const projCls = lineEdgeClass(p.point, s.k_line ? s.k_line.line : null);
   return `<tr data-hasedge="${(s.edges || []).some((e) => e.ev_per_unit > 0)}">
     <td>${nameCell}</td>

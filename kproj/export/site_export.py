@@ -53,45 +53,92 @@ def export_today(con, d) -> None:
     ).fetchall()
     starters = []
     odds_cache: dict = {}
-    for r in rows:
-        opp_team = r["away_team"] if r["team"] == r["home_team"] else r["home_team"]
-        pk = r["game_pk"]
-        if pk not in odds_cache:
-            odds_cache[pk] = gameline_snapshot(con, pk)
-        entry = {
-            "game_pk": r["game_pk"],
-            "pitcher": r["pitcher_name"],
-            "pitcher_id": r["pitcher_id"],
-            "team": r["team"],
-            "opp": opp_team,
-            "home": r["team"] == r["home_team"],
-            "time_et": _et_time(r["first_pitch_utc"]),
-            "status": r["status"],
-            "game_type": r["game_type"],
-            "venue": r["venue_name"],
-            "temp_f": r["temp_f"],
-            "wind_mph": r["wind_mph"],
-            "odds": odds_cache[pk],
-            "k_line": _k_line_summary(con, date_s, r["pitcher_id"]),
-            "last5_k": _last5_k(con, r["pitcher_id"], date_s),
-        }
-        if r["proj_id"]:
-            tier = "?"
-            try:
-                tier = json.loads(r["features_json"]).get("lineup_tier", "?")
-            except (TypeError, ValueError):
-                pass
-            entry.update({
-                "proj": {
-                    "point": r["point_est"], "p10": r["p10"], "p25": r["p25"],
-                    "p50": r["p50"], "p75": r["p75"], "p90": r["p90"],
-                    "lineup_confidence": r["lineup_confidence"], "lineup_tier": tier,
-                    "model_version": r["model_version"], "generated_at": r["generated_at"],
-                },
-                "edges": _edges_for(con, r["game_pk"], r["pitcher_id"]),
-            })
-        starters.append(entry)
+    signals_con = _open_signals_readonly()
+    try:
+        for r in rows:
+            opp_team = r["away_team"] if r["team"] == r["home_team"] else r["home_team"]
+            pk = r["game_pk"]
+            if pk not in odds_cache:
+                odds_cache[pk] = gameline_snapshot(con, pk)
+            k_line = _k_line_summary(con, date_s, r["pitcher_id"])
+            entry = {
+                "game_pk": r["game_pk"],
+                "pitcher": r["pitcher_name"],
+                "pitcher_id": r["pitcher_id"],
+                "team": r["team"],
+                "opp": opp_team,
+                "home": r["team"] == r["home_team"],
+                "time_et": _et_time(r["first_pitch_utc"]),
+                "status": r["status"],
+                "game_type": r["game_type"],
+                "venue": r["venue_name"],
+                "temp_f": r["temp_f"],
+                "wind_mph": r["wind_mph"],
+                "odds": odds_cache[pk],
+                "k_line": k_line,
+                "last5_k": _last5_k(con, r["pitcher_id"], date_s),
+                "workload_flag": _workload_flag(signals_con, date_s, r["pitcher_id"], k_line),
+            }
+            if r["proj_id"]:
+                tier = "?"
+                try:
+                    tier = json.loads(r["features_json"]).get("lineup_tier", "?")
+                except (TypeError, ValueError):
+                    pass
+                entry.update({
+                    "proj": {
+                        "point": r["point_est"], "p10": r["p10"], "p25": r["p25"],
+                        "p50": r["p50"], "p75": r["p75"], "p90": r["p90"],
+                        "lineup_confidence": r["lineup_confidence"], "lineup_tier": tier,
+                        "model_version": r["model_version"], "generated_at": r["generated_at"],
+                    },
+                    "edges": _edges_for(con, r["game_pk"], r["pitcher_id"]),
+                })
+            starters.append(entry)
+    finally:
+        if signals_con is not None:
+            signals_con.close()
     _write("today.json", {"date": date_s, "generated_at": db.utcnow(), "starters": starters})
+
+
+def _open_signals_readonly():
+    """Best-effort, READ-ONLY peek into signals.db for the workload-news flag
+    below. This is the one direction of the boundary in kproj/cli.py's
+    cmd_signals docstring ('never touches kproj.db') that's actually fine —
+    signals must never touch kproj.db, but kproj proper reading its small,
+    best-effort sibling DB for display purposes doesn't create the failure
+    mode that boundary exists to prevent. Every failure mode here (file
+    doesn't exist yet, mid-write, wrong schema) must still never break
+    today.json, so this returns None rather than raising."""
+    import sqlite3
+    if not config.SIGNALS_DB.exists():
+        return None
+    try:
+        con = sqlite3.connect(f"file:{config.SIGNALS_DB}?mode=ro", uri=True)
+        con.row_factory = sqlite3.Row
+        return con
+    except sqlite3.Error:
+        return None
+
+
+def _workload_flag(signals_con, date_s: str, pitcher_id: int, k_line: dict | None) -> dict | None:
+    """Short-leash/pitch-limit flag for the board (see kproj/signals/workload.py),
+    'trust but verify'-corroborated against the K line movement already
+    computed for this starter: a flag backed by a line that's moved down is
+    CORROBORATED; a flag with no matching line move is UNCONFIRMED, not
+    discarded — still worth a glance, just not fully trusted on its own."""
+    if signals_con is None:
+        return None
+    try:
+        from ..signals import workload
+        flag = workload.flags_for(signals_con, date_s, pitcher_id)
+    except Exception:  # noqa: BLE001 — a signals-db hiccup must never break today.json
+        return None
+    if not flag:
+        return None
+    move = (k_line or {}).get("move")
+    corroborated = move is not None and move <= -config.WORKLOAD_LINE_MOVE_CONFIRM_K
+    return {**flag, "status": "corroborated" if corroborated else "unconfirmed"}
 
 
 def _last5_k(con, pitcher_id: int, before_date: str) -> list:

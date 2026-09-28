@@ -181,12 +181,14 @@ def cmd_retrain(args) -> None:
 def cmd_signals(_args) -> None:
     """Hourly best-effort cycle. Never touches kproj.db — see kproj/signals/."""
     from .signals import export as sig_export
-    from .signals import fg, gameday, settle, social, store
+    from .signals import fg, gameday, settle, social, store, workload
 
     with store.session() as con:
         probables = gameday.refresh(con)
         social.scrape(con, probables)
         social.ingest_manual_csv(con, probables)
+        workload.scrape(con, probables)
+        workload.ingest_manual_csv(con, probables)
         fg.refresh(con)
         settle.settle(con)
         sig_export.export(con)

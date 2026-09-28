@@ -1,0 +1,11 @@
+pitcher,date,note
+# Manual fallback for short-leash / pitch-limit news (beat-reporter scraping
+# needs verified handles in KPROJ_WORKLOAD_HANDLES first — see config.py).
+# Edit from your phone via the GitHub app; the hourly job ingests it.
+# pitcher: name as it appears on the probable slate | date: YYYY-MM-DD (blank
+# = today's slate) | note: free text — matched against the same keyword list
+# a scraped tweet would be (config.WORKLOAD_KEYWORDS), so "short leash
+# tonight per beat writer" works fine without knowing the internal
+# vocabulary. A note that matches no keyword is still recorded at low
+# confidence rather than dropped. Example:
+# Jacob Misiorowski,2026-09-30,short leash tonight per beat writer

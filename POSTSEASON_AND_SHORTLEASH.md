@@ -174,8 +174,44 @@ Built on top of the mandatory fix's `game_type` plumbing:
    the scaling math (point re-floored at 0.05, quantile order preserved)
    directly; full smoke test (train → project → score → reconcile) still
    passes end to end.
-3. `workload_news.py` scrape + LLM extraction + line-movement corroboration —
-   the highest-effort piece, and the one with the least reliable upside
-   (soft/qualitative signals, fragile scraping), so it should come last and
-   ship as a best-effort *flag on the board*, not a silent model input, until
-   its precision is proven out over a season. Not yet started.
+3. **DONE, pushed Sept 28, 2026** (as `kproj/signals/workload.py`, not
+   `workload_news.py` — matches the existing `social.py` naming). Built as
+   designed, with one deliberate change from the original plan: **keyword/
+   phrase matching instead of LLM extraction.** The evidence still says LLM
+   extraction is the properly evidence-based answer for soft, qualitative
+   language like the actual Misiorowski quote ("build him back up... in a
+   mindful way") — but that costs money per call, and this project runs
+   under an explicit zero-dollar rule (`PARKING_LOT.md`). Wiring in a paid
+   API call inside an unattended daily workflow isn't a call to make
+   silently; it's parked in `config.py`'s comment for Robin to decide
+   explicitly if the keyword version's precision proves insufficient over a
+   season. What shipped:
+   - `config.WORKLOAD_KEYWORDS`: phrase → (confidence, flag_type), checked
+     verbatim (case/accent-insensitive) against scraped/manual text.
+     `config.WORKLOAD_NEWS_HANDLES` is deliberately empty by default — unlike
+     `SIGNALS_CAPPERS`, these would be guessed, unverified handles if seeded
+     now, so `lines/workload_notes.csv` (phone-editable, same pattern as
+     `capper_picks.csv`) is the reliable path until real handles are added.
+   - `kproj/signals/workload.py`: scrape (reuses `social.py`'s Nitter-mirror
+     rotation, refactored into a shared `fetch_rss()`) + manual CSV + the
+     conservative extractor. Never touches `kproj.db` — same boundary as the
+     rest of `kproj/signals/`.
+   - A `workload_flags` table in `signals.db` (isolated, best-effort, exactly
+     like `capper_picks`).
+   - **Trust but verify, wired for real**: `kproj/export/site_export.py` now
+     best-effort reads `signals.db` (read-only; a missing file, lock, or
+     schema mismatch degrades to no flag, never breaks `today.json`) and
+     marks each flag `corroborated` when the K line has already moved down by
+     `config.WORKLOAD_LINE_MOVE_CONFIRM_K` (0.5 K) or more, `unconfirmed`
+     otherwise. This is genuinely "a best-effort flag on the board" — it
+     rides in `today.json`'s `workload_flag` field per starter, not a silent
+     model input.
+   - Caught and fixed one real bug while testing: an early draft inferred
+     `flag_type` from substrings of the matched phrase (checking for `"il"`
+     to mean "return from injury"), which silently matched inside unrelated
+     words (`"il"` is a substring of `"built"`). Fixed by attaching the type
+     explicitly per keyword instead of inferring it — caught by a test built
+     specifically to catch it, not by inspection.
+   - Frontend badge (surfacing `workload_flag` on the actual Today board
+     table, not just in the JSON) is the one piece **not yet done** — the
+     data is flowing and tested, but nothing renders it yet.

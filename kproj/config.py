@@ -162,3 +162,56 @@ ODDS_PROPS_REFRESH_TOP_N = int(os.environ.get("KPROJ_PROPS_REFRESH_TOP_N", "3"))
 # FanGraphs Depth Charts rest-of-season projections (free JSON; daily pull).
 FG_PROJ_URL = "https://www.fangraphs.com/api/projections"
 FG_PROJ_TYPE = "rfangraphsdc"
+
+# --- Workload/short-leash news scrape (item 3, POSTSEASON_AND_SHORTLEASH.md) --
+# Same best-effort shape as the capper scrape above: public Nitter mirrors +
+# a phone-editable manual CSV fallback, never a hard dependency. This is
+# DELIBERATELY conservative — a keyword/phrase match, not an LLM call. The
+# assessment doc's evidence (Misiorowski: Pat Murphy's public language was
+# qualitative — "build him back up... in a mindful way" — days before starts,
+# never a same-day numeric pitch cap) means most of what's worth catching is
+# soft language, not a clean number, so LLM extraction was the natural fit —
+# but that costs money per call, and this project runs under a zero-dollar
+# rule (see PARKING_LOT.md). Parked here rather than silently wired in: if
+# the keyword version's false-positive/negative rate over a season makes a
+# paid LLM pass worth it, that's a decision for Robin to make explicitly, not
+# one to make by shipping a billed API call in an unattended daily workflow.
+# WORKLOAD_NEWS_HANDLES is deliberately empty by default — team beat-reporter
+# accounts belong here once verified (unlike SIGNALS_CAPPERS above, which
+# came from an earlier explicit ask, these would be guesses if seeded now).
+WORKLOAD_NEWS_HANDLES = [h for h in os.environ.get("KPROJ_WORKLOAD_HANDLES", "").split(",") if h]
+WORKLOAD_NOTES_CSV = Path(os.environ.get("KPROJ_WORKLOAD_CSV", ROOT / "lines" / "workload_notes.csv"))
+# phrase -> (confidence 0-1, flag_type). The type is attached explicitly per
+# phrase rather than inferred from the phrase text itself — an earlier draft
+# tried to infer it (checking substrings like "il" for "return_from_injury"),
+# which silently matched inside unrelated words ("il" is a substring of
+# "built"); explicit is worth the repetition here.
+WORKLOAD_KEYWORDS = {
+    "pitch limit": (0.85, "pitch_limit"),
+    "pitch count limit": (0.85, "pitch_limit"),
+    "on a pitch count": (0.8, "pitch_limit"),
+    "limited pitch count": (0.8, "pitch_limit"),
+    "on a strict pitch count": (0.85, "pitch_limit"),
+    "capped at": (0.7, "pitch_limit"),
+    "innings limit": (0.8, "innings_limit"),
+    "short leash": (0.75, "short_leash"),
+    "quick hook": (0.7, "short_leash"),
+    "bullpen game": (0.75, "bullpen_game"),
+    "piggyback": (0.75, "bullpen_game"),
+    "stretched out": (0.5, "other"),
+    "built back up": (0.5, "return_from_injury"),
+    "build him back up": (0.5, "return_from_injury"),
+    "workload management": (0.55, "other"),
+    "close eye on his workload": (0.5, "other"),
+    "monitor his workload": (0.5, "other"),
+    "eased back in": (0.5, "return_from_injury"),
+    "coming off the il": (0.35, "return_from_injury"),
+    "returning from injury": (0.4, "return_from_injury"),
+}
+# A flag only gets marked CORROBORATED (vs UNCONFIRMED) when the K line has
+# already moved down by at least this many strikeouts since it opened — the
+# same market cross-check described in the assessment's "trust but verify"
+# section. A flag with no line movement isn't discarded, just downweighted
+# for display; a line move with no flag is a separate, unrelated case (worth
+# a manual look, not something this feature invents a story for).
+WORKLOAD_LINE_MOVE_CONFIRM_K = 0.5

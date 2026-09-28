@@ -21,8 +21,11 @@ UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/126.0 Safari/537.36")
 
 
-def _fetch_rss(handle: str) -> tuple[list, str] | tuple[None, str]:
-    """Try each mirror until one returns a real RSS feed. Returns (items, mirror)."""
+def fetch_rss(handle: str) -> tuple[list, str] | tuple[None, str]:
+    """Try each mirror until one returns a real RSS feed. Returns (items, mirror).
+    Shared with kproj/signals/workload.py — the mirror-rotation logic is
+    identical for any X account, capper or beat reporter, so it lives here
+    once rather than being duplicated."""
     mirrors = config.SIGNALS_MIRRORS[:]
     random.shuffle(mirrors)              # spread load; no mirror is 'primary'
     last = "no mirrors configured"
@@ -71,7 +74,7 @@ def scrape(con, probables: list) -> dict:
     """One pass over all cappers. Returns {handle: n_new_posts|-1}."""
     results = {}
     for handle in config.SIGNALS_CAPPERS:
-        items, note = _fetch_rss(handle)
+        items, note = fetch_rss(handle)
         if items is None:
             store.source_status(con, f"x:{handle}", ok=False, note=note)
             results[handle] = -1

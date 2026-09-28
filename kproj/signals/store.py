@@ -68,6 +68,22 @@ CREATE TABLE IF NOT EXISTS fg_proj (
     PRIMARY KEY (date, pitcher_id)
 );
 
+CREATE TABLE IF NOT EXISTS workload_flags (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    date        TEXT,                 -- ET game date the flag applies to
+    pitcher_raw TEXT,
+    pitcher_id  INTEGER,
+    flag_type   TEXT,                 -- 'pitch_limit' | 'short_leash' | 'return_from_injury' | 'other'
+    confidence  REAL,                 -- 0-1, from the matched keyword phrase (see config.WORKLOAD_KEYWORDS)
+    phrase      TEXT,                 -- the keyword phrase that matched
+    snippet     TEXT,                 -- surrounding text, for a human to sanity-check
+    source      TEXT,                 -- 'auto:<handle>' | 'manual'
+    source_url  TEXT,
+    post_id     TEXT,
+    scraped_at  TEXT,
+    UNIQUE (date, pitcher_raw, source, phrase)
+);
+
 CREATE TABLE IF NOT EXISTS kv (
     key   TEXT PRIMARY KEY,
     value TEXT

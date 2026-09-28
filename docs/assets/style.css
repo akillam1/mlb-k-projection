@@ -103,6 +103,9 @@ footer.site { color: var(--dim); font-size: 11.5px; line-height: 1.6; margin-top
 .board-tbl td .pm { color: var(--dim); font-size: 11px; margin-top: 1px; white-space: nowrap; }
 .board-tbl td .l5 { color: var(--dim); font-size: 10.5px; margin-top: 1px; white-space: nowrap; }
 .board-tbl td .l5 .l5-nums { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.board-tbl td .wf { font-size: 10.5px; margin-top: 1px; white-space: nowrap; cursor: help; }
+.board-tbl td .wf.wf-confirmed { color: var(--gold); font-weight: 600; }
+.board-tbl td .wf.wf-unconfirmed { color: var(--dim); }
 /* Proj K is the reason this table exists — biggest, boldest number in it. */
 .board-tbl td .proj { font-weight: 800; font-size: 21px; }
 .board-tbl th[data-key="proj"] { color: var(--text); }
