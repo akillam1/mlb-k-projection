@@ -212,6 +212,50 @@ Built on top of the mandatory fix's `game_type` plumbing:
      words (`"il"` is a substring of `"built"`). Fixed by attaching the type
      explicitly per keyword instead of inferring it — caught by a test built
      specifically to catch it, not by inspection.
-   - Frontend badge (surfacing `workload_flag` on the actual Today board
-     table, not just in the JSON) is the one piece **not yet done** — the
-     data is flowing and tested, but nothing renders it yet.
+   - **DONE, pushed Sept 28, 2026.** Frontend badge: `workload_flag` renders
+     on the Today board table (`docs/assets/app.js`'s `workloadNote()`,
+     styled in `docs/assets/style.css`) — a small note under the pitcher's
+     name, solid/gold when corroborated, dim when unconfirmed, snippet on
+     hover. All 3 build-order items are now fully shipped end to end.
+
+## 7. Methodology and Performance pages — updated Sept 28, 2026
+
+Robin asked for `methodology.html` to be rewritten to fully capture the
+model (all of the above — postseason mode, the workload flag, the
+`team_leash_bf` feature, the retrain/predict feature-list decoupling fix)
+and for `performance.html` to be redesigned around what he actually cares
+about: a historical record of what the model suggested vs. the book lines
+and how it performed, which the old layout buried under a Betting-record
+tile row, a Recent-form tile row, the Model-vs-market section, a raw daily
+K-MAE chart, and a calibration chart — in that order, with the actual
+pick-by-pick ledger last. He also flagged CLV (a graph near the top) and the
+raw K-MAE chart as not worth the space.
+
+Changes:
+- `kproj/export/site_export.py`: `_bet_metrics` now also returns
+  `wins`/`losses`/`pushes` (previously only `hit_pct`); a new
+  `_market_history()` builds a newest-first, per-pick ledger (date, pitcher,
+  side/line/book/odds, model point estimate, actual K, result, units, and an
+  `is_edge` flag marking whether that pick was also a positive-EV
+  recommendation) from the existing `_market_rows()` data — which already
+  covered every graded start the model had an opinion on, not just +EV
+  picks, it just wasn't exposed as a list before. The unused daily raw-MAE
+  query/field is removed.
+- `docs/performance.html` / `docs/assets/perf.js`: reordered around one
+  headline section, "Model vs. the book lines" (tiles + cumulative-units
+  chart + monthly model-vs-book MAE chart + the new ledger table, dot-marked
+  for +EV picks), with the positive-EV betting record, model quality
+  (MAE/bias/coverage, no chart), calibration, and model versions as smaller
+  sections below it. CLV is no longer tracked or displayed anywhere on the
+  page (previously an "avg CLV" tile in two places); the raw daily K-MAE
+  line chart is gone (replaced by compact lifetime/30-day MAE tiles).
+- `docs/methodology.html`: added "Postseason mode" and "Short-leash /
+  workload flag" sections, a "What isn't modeled yet: times-through-the-order"
+  note, a "Retraining without breaking live projections" note on the
+  feature-list decoupling fix, `team_leash_bf` added to the feature list,
+  and the Performance-tab and Signals-tab sections updated to match the
+  above.
+- Verified via the smoke test (asserts on `betting.lifetime.wins/losses` and
+  `market.history`), a direct in-memory check of the new export functions'
+  JSON shape, and a Node `vm`-sandbox render of `perf.js` against synthetic
+  data (including an XSS-escaping check on a pitcher name).

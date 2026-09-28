@@ -235,6 +235,8 @@ def _bet_metrics(con, since: str | None) -> dict:
     r = con.execute(
         f"""SELECT COUNT(*) n,
                    SUM(pnl_units) units,
+                   SUM(CASE WHEN result='win' THEN 1 ELSE 0 END) wins,
+                   SUM(CASE WHEN result='loss' THEN 1 ELSE 0 END) losses,
                    AVG(CASE WHEN result='win' THEN 1.0 WHEN result='loss' THEN 0.0 END)*100 hit,
                    AVG(clv_pct) clv
             FROM (
@@ -250,8 +252,13 @@ def _bet_metrics(con, since: str | None) -> dict:
     ).fetchone()
     n = r["n"] or 0
     units = r["units"] or 0.0
+    wins = r["wins"] or 0
+    losses = r["losses"] or 0
     return {
         "n": n,
+        "wins": wins,
+        "losses": losses,
+        "pushes": n - wins - losses,
         "units": round(units, 2),
         "roi_pct": round(units / n * 100, 2) if n else None,
         "hit_pct": round(r["hit"], 1) if r["hit"] is not None else None,
@@ -285,13 +292,17 @@ def _calibration(con) -> list:
 def _market_rows(con, since: str | None) -> list:
     """ONE row per settled (game, pitcher): the canonical book's line
     (PREFERRED_BOOKS chain), the side the model favored, its result/PnL at
-    1u flat, plus model point est vs the line."""
+    1u flat, plus model point est vs the line. Includes every graded start
+    the model had an opinion on — NOT filtered to positive-EV picks — so
+    this is the full "model vs the book line" record, a superset of the
+    picks Robin would actually have staked (see `is_edge` per row)."""
     where = "AND b.date >= ?" if since else ""
     args = (since,) if since else ()
     return con.execute(
         f"""SELECT * FROM (
-              SELECT b.date, o.game_pk, o.pitcher_id, o.book, o.line, b.side,
-                     b.odds, b.model_prob, b.actual_k, b.result, b.pnl_units,
+              SELECT b.date, o.game_pk, o.pitcher_id, pl.name pitcher,
+                     o.book, o.line, b.side, b.odds, b.model_prob,
+                     o.ev_per_unit, b.actual_k, b.result, b.pnl_units,
                      pr.point_est,
                      ROW_NUMBER() OVER (
                        PARTITION BY o.game_pk, o.pitcher_id
@@ -300,10 +311,36 @@ def _market_rows(con, since: str | None) -> list:
               JOIN opportunities o ON o.id = b.opportunity_id
               LEFT JOIN projection_results pr
                      ON pr.game_pk = o.game_pk AND pr.pitcher_id = o.pitcher_id
+              LEFT JOIN players pl ON pl.mlb_id = o.pitcher_id
               WHERE o.is_latest = 1 AND b.result IN ('win','loss','push') {where}
             ) WHERE rn = 1 ORDER BY date""",
         args,
     ).fetchall()
+
+
+def _market_history(rows, limit: int = 300) -> list:
+    """Newest-first per-pick ledger for the Performance page's main table:
+    what the model favored vs the canonical book line, and how it landed.
+    `is_edge` marks the subset that was actually a positive-EV recommendation
+    (what Robin would have staked) so one table can show both without
+    needing two separate queries/sections."""
+    ordered = sorted(rows, key=lambda r: r["date"], reverse=True)[:limit]
+    return [
+        {
+            "date": r["date"],
+            "pitcher": r["pitcher"],
+            "side": r["side"],
+            "line": r["line"],
+            "book": r["book"],
+            "odds": r["odds"],
+            "point_est": r["point_est"],
+            "actual_k": r["actual_k"],
+            "result": r["result"],
+            "pnl_units": round(r["pnl_units"], 2) if r["pnl_units"] is not None else None,
+            "is_edge": bool(r["ev_per_unit"] is not None and r["ev_per_unit"] > 0),
+        }
+        for r in ordered
+    ]
 
 
 def _market_metrics(rows) -> dict:
@@ -364,11 +401,6 @@ def export_performance(con) -> None:
     today = datetime.now(timezone.utc).date()
     d30 = (today - timedelta(days=30)).isoformat()
     d7 = (today - timedelta(days=7)).isoformat()
-    daily = con.execute(
-        """SELECT date, COUNT(*) n, AVG(abs_error) mae FROM projection_results
-           WHERE date >= ? GROUP BY date ORDER BY date""",
-        ((today - timedelta(days=60)).isoformat(),),
-    ).fetchall()
     versions = con.execute(
         """SELECT m.version, m.trained_at, m.train_rows, m.valid_mae, m.active,
                   (SELECT COUNT(*) FROM projection_results pr WHERE pr.model_version = m.version) n_scored,
@@ -394,9 +426,9 @@ def export_performance(con) -> None:
             "t30": _market_metrics(mkt_30),
             "cum_pnl": _market_cum_pnl(mkt_rows),
             "monthly": _market_monthly(mkt_rows),
+            "history": _market_history(mkt_rows),
         },
         "calibration": _calibration(con),
-        "daily_mae": [{"date": r["date"], "mae": round(r["mae"], 3), "n": r["n"]} for r in daily],
         "versions": [
             {
                 "version": r["version"], "trained_at": r["trained_at"],

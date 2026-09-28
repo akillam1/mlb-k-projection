@@ -20,30 +20,34 @@
     <a href="methodology.html">Methodology</a>
   </nav>
 
-  <h2 class="sec">Betting record (positive-EV picks, one book per pick, lifetime)</h2>
-  <div class="tiles" id="bet-tiles"></div>
+  <h2 class="sec">Model vs. the book lines</h2>
+  <p class="sec-sub">Every graded start the model had an opinion on, compared to the canonical
+    book line (one book per pick — see <a href="methodology.html" style="color:var(--accent)">Methodology</a>).
+    The green dot marks picks that were also a positive-EV recommendation — what Robin would
+    actually have staked; the rest are graded for accuracy only.</p>
+  <div class="tiles" id="mkt-tiles"></div>
+  <canvas id="pnlChart" height="150"></canvas>
+  <canvas id="mktMaeChart" height="150"></canvas>
 
-  <h2 class="sec">Recent form</h2>
-  <div class="tiles" id="form-tiles"></div>
+  <div class="hist-legend"><span class="edge-dot"></span> positive-EV pick (staked)
+    &nbsp;&nbsp;<span class="edge-dot off"></span> model call only</div>
+  <div class="hist-tbl"><table class="t" id="history"><thead><tr>
+    <th>Date</th><th>Pitcher</th><th>Pick</th><th class="num">Proj</th>
+    <th class="num">Actual K</th><th>Result</th><th class="num">Units</th>
+  </tr></thead><tbody></tbody></table></div>
 
-  <h2 class="sec">Model vs the market</h2>
-  <div id="mkt-wrap">
-    <div class="tiles" id="mkt-tiles"></div>
-    <canvas id="pnlChart" height="170"></canvas>
-    <canvas id="mktMaeChart" height="170"></canvas>
-  </div>
+  <h2 class="sec">Positive-EV betting record</h2>
+  <p class="sec-sub">Same ledger, filtered to only the picks that were actually a recommended
+    (positive expected value) bet at 1u flat.</p>
+  <div class="tiles tiles-compact" id="bet-tiles"></div>
+  <p class="subnote" id="form-note"></p>
 
-  <h2 class="sec">Projection accuracy</h2>
-  <div class="tiles" id="proj-tiles"></div>
-  <canvas id="maeChart" height="170"></canvas>
+  <h2 class="sec">Model quality</h2>
+  <p class="sec-sub">Raw projection accuracy, independent of any betting.</p>
+  <div class="tiles tiles-compact" id="proj-tiles"></div>
 
   <h2 class="sec">Calibration — predicted vs actual hit rate</h2>
-  <canvas id="calChart" height="220"></canvas>
-
-  <h2 class="sec">Recent picks · one book per pick (DraftKings-first)</h2>
-  <table class="t" id="bets"><thead><tr>
-    <th>Date</th><th>Pick</th><th>Odds</th><th>Result</th><th>P/L</th><th>CLV</th>
-  </tr></thead><tbody></tbody></table>
+  <canvas id="calChart" height="200"></canvas>
 
   <h2 class="sec">Model versions</h2>
   <table class="t" id="versions"><thead><tr>
@@ -55,7 +59,7 @@
     Low-sample warnings stay up until 500 settled bets. 1-800-GAMBLER.
   </footer>
 </div>
-<script src="assets/perf.js?v=20260802"></script>
+<script src="assets/perf.js?v=20260928"></script>
 <script src="assets/refresh.js?v=20260922"></script>
 </body>
 </html>

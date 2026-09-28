@@ -78,9 +78,10 @@
     point estimate, and five separate quantile models (p10/p25/p50/p75/p90) trace the
     predictive distribution. A smooth monotone curve (PCHIP) through those quantiles
     gives the probability of clearing any line. It retrains weekly on an expanding
-    window of every start since 2022.</p>
+    window of every regular-season start since 2022 (postseason starts are handled
+    separately — see below).</p>
 
-    <h3>Features, in order of importance</h3>
+    <h3>Features that feed the model, in order of importance</h3>
     <ul>
       <li><b>Pitcher swing-and-miss form:</b> CSW% (called strikes + whiffs per pitch),
       SwStr%, and K% as exponentially-weighted averages with a half-life of ~5 starts.
@@ -88,8 +89,14 @@
       <li><b>Opponent lineup K% vs handedness:</b> slot-weighted strikeout rate of the
       nine projected hitters against the pitcher's hand, blending the last 30 days (60%)
       with the season (40%).</li>
-      <li><b>Expected workload:</b> recent batters-faced average plus the game's run
-      environment (Vegas total when available, otherwise both teams' recent scoring).</li>
+      <li><b>Expected workload:</b> the pitcher's own recent batters-faced average, a
+      <i>team-level "quick hook" prior</i> (that team's own starters' recency-weighted BF
+      over their last 20 starts — computed in-house from logged relief appearances, no
+      external dependency), and the game's run environment (Vegas total when available,
+      otherwise both teams' recent scoring). The team prior exists because a manager's
+      hook tendency is a property of the team/staff, not just that one pitcher's track
+      record — a rookie's first few starts have no personal BF history to lean on, but
+      his team's bullpen-usage pattern already does.</li>
       <li><b>Stabilizers and context:</b> K-BB%, fastball velocity trend (fatigue flag),
       park K factor, home-plate umpire tendency, temperature/wind for outdoor parks,
       home/away, days of rest.</li>
@@ -97,7 +104,8 @@
       blended by sample size — the model leans on the prior in April and on current form
       by June (weight = BF / (BF + 70)).</li>
       <li><b>Deliberately excluded:</b> batter-vs-pitcher history (mostly noise under
-      ~25 PA).</li>
+      ~25 PA). Times-through-the-order (see "What isn't modeled yet" below) is also not
+      an explicit feature, though the recency-weighted features above partially absorb it.</li>
     </ul>
 
     <h3>When lineups aren't posted yet</h3>
@@ -106,6 +114,97 @@
     K% vs hand. Each tier carries a <i>lineup confidence</i> (1.0 / 0.6 / 0.3) shown on
     every card, and lower confidence widens the projected range and discounts the edge
     score rather than pretending certainty.</p>
+
+    <h3>Retraining without breaking live projections</h3>
+    <p>The model retrains weekly but projects daily, so most days run against a model
+    trained several days earlier. Whenever a feature is added or removed, each trained
+    model records its own exact input list at training time, and projection always
+    builds its feature vector from <i>that specific model's</i> list rather than the
+    current code's list. That decoupling means adding a new feature can never crash or
+    silently corrupt a projection running against the still-active older model in the
+    days before the next retrain catches up.</p>
+
+    <h2>Postseason mode</h2>
+    <p>The board only started projecting postseason games starting the 2026 playoffs —
+    earlier versions filtered the schedule to regular-season games only, so the board
+    would have gone dark for all of October. Postseason starts are now shown, but
+    handled deliberately differently from the regular season:</p>
+    <ul>
+      <li><b>Not trained on postseason data.</b> There isn't remotely enough postseason
+      history yet (one or two Octobers' worth of starts) to train a reliable
+      postseason-specific model, and mixing a handful of postseason rows into the
+      regular-season training set would bias it rather than improve it. Training still
+      filters to regular-season starts only.</li>
+      <li><b>A measured, inference-time-only adjustment instead.</b> Postseason starters
+      throw meaningfully fewer innings than in the regular season — FanGraphs' 2025 data
+      puts it at ≈4.35 IP vs ≈5.19 IP, roughly a 16% reduction — but their per-inning
+      quality doesn't decline (FIP is flat at ≈3.64 either way). That's a pure
+      <i>quantity</i> effect: fully-rested, high-leverage bullpens let managers pull
+      starters earlier, not that the starter's stuff gets worse. So rather than
+      adjusting any K-rate or quality input, the model's full predicted distribution
+      (point estimate and every quantile) is scaled down by that measured ratio
+      (4.35/5.19) at prediction time only, for any Wild Card / Division / Championship /
+      World Series game — training is completely untouched.</li>
+      <li><b>Revisited once there's real data.</b> Postseason game type is tagged on
+      every prediction, so postseason calibration can be tracked separately from the
+      regular-season model's numbers — a handful of October starts should never quietly
+      drag down (or flatter) the metric this site uses to judge the regular-season
+      model. Once enough postseason starts accumulate across multiple Octobers, this
+      stopgap gets replaced with an actually-trained adjustment.</li>
+    </ul>
+
+    <h2>Short-leash / workload flag</h2>
+    <p>Some starts have a manager-imposed batters-faced ceiling decided before first
+    pitch — a rookie on innings limits, a pitcher easing back from injury, a planned
+    bullpen game. This is a different phenomenon from ordinary in-game fatigue: it's not
+    about how a pitcher's stuff holds up as a lineup sees him more times, it's a
+    pre-set cap on opportunities, and it's sometimes knowable in advance from beat-reporter
+    coverage. The evidence for treating it this way — rather than as a stuff/quality
+    adjustment — comes from the industry precedent of modeling two separate
+    batters-faced "leash profiles" (normal vs. short) and widening the distribution
+    when the outcome is uncertain, plus the finding that the general times-through-the-order
+    penalty is driven by batter familiarity, not pitcher fatigue, so a manager pulling a
+    starter early is capping opportunities, not protecting declining stuff.</p>
+    <p>In practice, real examples of this (a team's public language before a short-leash
+    start) are almost never a clean number — it's soft, qualitative language days out
+    ("we have to build him back up... in a mindful way"), not a same-day pitch-count
+    press release. So this ships as a <b>flag, never a hard number and never a silent
+    model input</b>:</p>
+    <ul>
+      <li>A best-effort scrape (public X mirrors, same fragile-by-nature approach as
+      everything else that touches X/Twitter, plus a phone-editable manual CSV fallback
+      for when scraping is down or a handle isn't tracked yet) looks for a fixed set of
+      phrases — "short leash," "pitch limit," "innings limit," "bullpen game," "built
+      back up," and similar — in pregame coverage.</li>
+      <li>This is deliberately a conservative keyword/phrase match, not an AI model
+      call. The evidence says an LLM would catch more of the soft, qualitative phrasing
+      a numeric pattern misses — but that costs money per call, and this project runs
+      under a strict zero-dollar rule, so wiring a paid API call into an unattended
+      daily job isn't a decision to make silently. The keyword version is the honest
+      free version: it will miss novel phrasing, but it will never invent a flag from
+      nothing.</li>
+      <li><b>Trust but verify:</b> every flag is cross-checked against that start's K
+      line movement. If the line has already moved down since the flag showed up, it's
+      marked <b>corroborated</b> (shown as a solid badge on the Today board); if not,
+      it's marked <b>unconfirmed</b> (shown dimmer) rather than discarded — a single
+      scraped tweet isn't a source to fully trust on its own, but it's still worth
+      seeing.</li>
+      <li>It never touches the model or the projected number directly — it's a note
+      under the pitcher's name on the Today board so it can be eyeballed before betting,
+      nothing more.</li>
+    </ul>
+
+    <h3 id="ttop">What isn't modeled yet: times-through-the-order</h3>
+    <p>Separate from short leash above: research on the times-through-the-order penalty
+    (the general in-game decline as a starter faces a lineup multiple times) finds it's
+    driven by batter familiarity, not pitcher fatigue — wOBA rises gradually across the
+    first three trips through the order and then plateaus, and it's a continuous effect
+    rather than a threshold you cross. It's partially absorbed here already through the
+    recency-weighted form and workload features above, but there's no explicit
+    "third-time-through" signal yet. Given the effect is continuous, a hard rule (cut K
+    rate by X% past the second time through) would be the wrong shape for it — a smooth
+    interaction feature would fit better if this gets added, but it's a lower priority
+    than short leash was.</p>
 
     <h2>Edge math &amp; pick ranking</h2>
     <p>For each K line we strip the vig from the two-way price (multiplicative
@@ -120,34 +219,44 @@
     high win probability at a price that still loses money long-run (heavy vig)
     is not a pick.</p>
 
-    <h2>Signals tab — turned off</h2>
+    <h2>Signals tab — turned off (but the underlying system isn't)</h2>
     <p>There used to be a Signals tab: a pre-game validation view with GO/CAUTION/WAIT
     pick windows, a model/line/FanGraphs comparison, and capper picks scraped
     best-effort from X. It wasn't getting used and mostly repeated what the Today
     board already showed, and the capper scraping had stopped working reliably (X
-    blocks free automated access), so the hourly job that fed it is paused and the tab
-    is off the nav. The code and data (<code>kproj/signals/</code>,
+    blocks free automated access), so the hourly job that fed <i>that view</i> is paused
+    and the tab is off the nav. The code and data (<code>kproj/signals/</code>,
     <code>docs/data/validation.json</code>) are still in the repo if it's ever worth
     reviving — <code>python -m kproj signals</code> still runs it by hand.</p>
+    <p>The short-leash/workload flag above is built on that same isolated subsystem
+    (same best-effort scraping shape, same rule that it can never touch the main
+    database) but is a separate, currently-active feature — it runs on the same hourly
+    cycle and its output surfaces directly on the Today board, unlike the retired
+    Signals view.</p>
 
     <h2>How to read the Performance tab</h2>
     <p>Performance is the <i>after-the-fact</i> record. Everything on it follows the
-    one-pick-one-book rule.</p>
+    one-pick-one-book rule, and the page is built around one question: what did the
+    model say vs. the book line, and how did it hold up?</p>
     <ul>
-      <li><b>Betting record:</b> all settled positive-EV picks at 1u flat — ROI, hit
-      rate, net units, and closing-line value where a closing line was recorded. The
-      low-sample warning stays up until ~500 settled picks.</li>
-      <li><b>Model vs the market:</b> drops the +EV filter and asks a harder question:
-      on <i>every</i> canonical line, take whichever side the model favored — what's
-      the record and net units, and who called the Ks closer, the model or the book
-      (MAE, with a monthly breakdown)?</li>
-      <li><b>Projection accuracy:</b> MAE and bias of the raw K projections plus
-      p10–p90 coverage (target ≈ 80%) — model quality independent of any betting.</li>
+      <li><b>Model vs. the book lines:</b> the headline section. On <i>every</i>
+      canonical line the model was graded against — not just the ones it liked enough to
+      recommend — take whichever side it favored: what's the record and net units, and
+      who called the Ks closer, the model or the book (MAE, with a monthly breakdown)?
+      The ledger table underneath is the full pick-by-pick history, newest first; the
+      green dot marks the subset that was also a positive-EV recommendation.</li>
+      <li><b>Positive-EV betting record:</b> the narrower, real-money question — of the
+      picks that were actually a recommended bet, what's the ROI, hit rate, and net
+      units at 1u flat? The low-sample warning stays up until ~500 settled picks.</li>
+      <li><b>Model quality:</b> MAE and bias of the raw K projections plus p10–p90
+      coverage (target ≈ 80%) — accuracy independent of any betting.</li>
       <li><b>Calibration:</b> predicted win % vs what actually happened, in buckets.
       Dots on the diagonal mean the probabilities can be taken at face value.</li>
-      <li><b>Recent picks &amp; model versions:</b> the raw pick log — one line per
-      pick at its canonical book — and each trained model's backtest vs live error.</li>
+      <li><b>Model versions:</b> each trained model's backtest vs. live error.</li>
     </ul>
+    <p>Closing-line value (CLV) isn't tracked on this page — it only ever gets measured
+    when a closing line happens to be entered manually, which was too sparse and too
+    easy to over-read, so it's gone rather than shown as an incomplete number.</p>
 
     <h2>Honest limitations</h2>
     <ul>
@@ -159,7 +268,12 @@
       still-in-progress games generally — are unsettled at flip time and finish
       reconciling on the next morning's run. That is why a just-flipped evening board
       shows yesterday's results as partial, more often than before.</li>
-      <li>CLV is only measured when a closing line is entered manually.</li>
+      <li>The postseason BF adjustment is a measured stopgap, not a trained model —
+      there isn't enough postseason data yet to train one properly (see "Postseason
+      mode" above).</li>
+      <li>The short-leash flag is best-effort and conservative by design: it can miss
+      real short-leash situations phrased in ways its keyword list doesn't cover, and it
+      depends on public X mirrors that are frequently unreliable.</li>
       <li>Retractable-roof parks: day-of roof status isn't freely available, so weather
       is attenuated rather than exact.</li>
       <li>Trust the calibration plot and 30-day panel over any single hot streak;
