@@ -213,15 +213,21 @@ function tableView(starters) {
 }
 
 /* Tomorrow preview (kproj/export/site_export.py's export_tomorrow): same row
-   rendering as Today's table, but static — sorted by first pitch only, no
-   sort-click handlers — since edges are essentially always empty this early
-   (lines usually aren't posted a day out). Stays hidden until there's an
-   actual starter to show, so this is a no-op the vast majority of the
-   regular season and only really lights up in the postseason's sparser
-   schedule, which is what it was built for. */
+   rendering as Today's table, but static — sorted by projected K's, highest
+   first, no sort-click handlers — since edges are essentially always empty
+   this early (lines usually aren't posted a day out). Stays hidden until
+   there's an actual starter to show, so this is a no-op the vast majority
+   of the regular season and only really lights up in the postseason's
+   sparser schedule, which is what it was built for. */
 function tomorrowTableView(starters) {
   const rows = starters.slice()
-    .sort((a, b) => String(a.time_et).localeCompare(b.time_et))
+    .sort((a, b) => {
+      // Highest projected K's first; starters with no projection yet sink to the bottom.
+      const ap = a.proj ? a.proj.point : -Infinity;
+      const bp = b.proj ? b.proj.point : -Infinity;
+      if (bp !== ap) return bp - ap;
+      return String(a.time_et).localeCompare(b.time_et);
+    })
     .map(tableRow).join("");
   const head = TABLE_COLS.map((c) =>
     `<th class="${c.num ? "num" : ""}">${esc(c.label)}</th>`).join("");
