@@ -149,6 +149,15 @@ def cmd_daily(_args) -> None:
             print(f"[lines] warning: {w}")
         project_date(con, util.iso(today))
         score_date(con, today)
+        # Look-ahead: also project/score tomorrow so the site's "Tomorrow"
+        # preview (see export_tomorrow) is live as soon as tomorrow's
+        # probable starters are posted, not just after the 7 PM AZ rollover.
+        # No-ops cleanly (0 projections) when tomorrow's slate isn't known
+        # yet — same probables/lineup fallback tiers as any other projection.
+        tomorrow = today + timedelta(days=1)
+        n_tmrw = project_date(con, util.iso(tomorrow))
+        if n_tmrw:
+            score_date(con, tomorrow)
         export_all(con, util.iso(today))
     print("[daily] done")
 
@@ -165,6 +174,7 @@ def cmd_rescore(_args) -> None:
         for w in res["unmatched"]:
             print(f"[lines] warning: {w}")
         score_date(con, today)
+        score_date(con, today + timedelta(days=1))  # tomorrow preview, if a manual line landed early
         export_all(con, util.iso(today))
     print("[rescore] done")
 

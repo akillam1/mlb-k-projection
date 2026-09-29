@@ -212,6 +212,38 @@ function tableView(starters) {
   </div></div>`;
 }
 
+/* Tomorrow preview (kproj/export/site_export.py's export_tomorrow): same row
+   rendering as Today's table, but static — sorted by first pitch only, no
+   sort-click handlers — since edges are essentially always empty this early
+   (lines usually aren't posted a day out). Stays hidden until there's an
+   actual starter to show, so this is a no-op the vast majority of the
+   regular season and only really lights up in the postseason's sparser
+   schedule, which is what it was built for. */
+function tomorrowTableView(starters) {
+  const rows = starters.slice()
+    .sort((a, b) => String(a.time_et).localeCompare(b.time_et))
+    .map(tableRow).join("");
+  const head = TABLE_COLS.map((c) =>
+    `<th class="${c.num ? "num" : ""}">${esc(c.label)}</th>`).join("");
+  return `<div class="board-tbl-wrap"><div class="board-tbl">
+    <table class="t"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table>
+  </div></div>`;
+}
+
+async function loadTomorrow() {
+  let data;
+  try {
+    data = await (await fetch("data/tomorrow.json?_=" + Date.now())).json();
+  } catch {
+    return; // no tomorrow.json yet (e.g. an older cached export) — stays hidden
+  }
+  const starters = data.starters || [];
+  if (!starters.length) return;
+  $("#tomorrow-date").textContent = `· ${data.date}`;
+  $("#tomorrow-board").innerHTML = tomorrowTableView(starters);
+  $("#tomorrow-wrap").hidden = false;
+}
+
 async function main() {
   let data;
   try {
@@ -268,3 +300,4 @@ async function main() {
   render();
 }
 main();
+loadTomorrow();

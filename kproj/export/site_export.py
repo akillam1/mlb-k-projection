@@ -1,7 +1,7 @@
 """Export compact JSON for the static GitHub Pages dashboard (roadmap §7)."""
 import json
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from .. import config, db, util
@@ -35,7 +35,11 @@ def _et_time(first_pitch_utc: str | None) -> str:
         return ""
 
 
-def export_today(con, d) -> None:
+def _build_slate(con, d) -> dict:
+    """Everything the Today board needs for one calendar date: shared by
+    export_today (the live board date) and export_tomorrow (a look-ahead at
+    the next day, for the postseason's sparser schedule — see export_tomorrow's
+    docstring)."""
     date_s = util.iso(d) if not isinstance(d, str) else d
     rows = con.execute(
         """SELECT g.game_pk, g.date, g.home_team, g.away_team, g.first_pitch_utc, g.status,
@@ -98,7 +102,25 @@ def export_today(con, d) -> None:
     finally:
         if signals_con is not None:
             signals_con.close()
-    _write("today.json", {"date": date_s, "generated_at": db.utcnow(), "starters": starters})
+    return {"date": date_s, "generated_at": db.utcnow(), "starters": starters}
+
+
+def export_today(con, d) -> None:
+    _write("today.json", _build_slate(con, d))
+
+
+def export_tomorrow(con, d) -> None:
+    """A look-ahead at the day after the live board date, in the same shape
+    as today.json. Built for the postseason: with 1-2 games a day and long
+    gaps between them, Robin wants to see the next start as soon as its
+    probable is posted, not wait for the 7 PM AZ rollover. Regular-season
+    schedules already ingest tomorrow's probables (kproj/cli.py's cmd_daily
+    fetches a 2-day schedule window), so this works the same way year-round —
+    it degrades to an empty starters list, not an error, when tomorrow's
+    slate isn't known yet (no game, or probables not posted)."""
+    date_s = util.iso(d) if not isinstance(d, str) else d
+    nd = util.iso(date.fromisoformat(date_s) + timedelta(days=1))
+    _write("tomorrow.json", _build_slate(con, nd))
 
 
 def _open_signals_readonly():
@@ -501,6 +523,7 @@ def export_meta(con) -> None:
 
 def export_all(con, d) -> None:
     export_today(con, d)
+    export_tomorrow(con, d)
     export_performance(con)
     export_recent(con)
     export_meta(con)

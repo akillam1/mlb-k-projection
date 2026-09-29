@@ -239,11 +239,21 @@ def main():
         write_lines(t_starters, TODAY)
         ingest_lines_csv(con)
         score_date(con, TODAY)
+
+        # --- tomorrow: postseason-style look-ahead (mirrors cmd_daily's extra
+        # project_date/score_date call) — a slate with probables posted but
+        # (deliberately) no lines yet, since that's the realistic case this
+        # feature exists for.
+        TOMORROW = TODAY + timedelta(days=1)
+        gen_slate(con, TOMORROW, status="Preview")
+        if project_date(con, util.iso(TOMORROW)) == 0:
+            fail("no projections for tomorrow's look-ahead slate")
+
         export_all(con, util.iso(TODAY))
 
         # --- assertions on exports
         site = Path(os.environ["KPROJ_SITE_DATA"])
-        for name in ("today.json", "performance.json", "recent.json", "meta.json"):
+        for name in ("today.json", "tomorrow.json", "performance.json", "recent.json", "meta.json"):
             p = site / name
             if not p.exists():
                 fail(f"missing export {name}")
@@ -258,6 +268,15 @@ def main():
             fail("performance.json has no reconciled projections")
         if perf["betting"]["lifetime"]["n"] == 0:
             fail("performance.json has no settled bets")
+
+        tmrw = json.loads((site / "tomorrow.json").read_text())
+        if tmrw["date"] != util.iso(TOMORROW):
+            fail(f"tomorrow.json date mismatch: {tmrw['date']} != {util.iso(TOMORROW)}")
+        tmrw_proj = [s for s in tmrw["starters"] if s.get("proj")]
+        if not tmrw_proj:
+            fail("tomorrow.json has no projections")
+        if any(s.get("edges") for s in tmrw_proj):
+            fail("tomorrow.json has edges despite no lines entered for it — unexpected")
 
         ms = con.execute("SELECT version, valid_mae FROM model_registry WHERE active=1").fetchone()
         print("\n================ SMOKE TEST PASS ================")
