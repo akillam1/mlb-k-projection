@@ -259,3 +259,150 @@ Changes:
   `market.history`), a direct in-memory check of the new export functions'
   JSON shape, and a Node `vm`-sandbox render of `perf.js` against synthetic
   data (including an XSS-escaping check on a pitcher name).
+
+## 8. Postseason ace adjustment — research plan (documented Oct 11, 2026, NOT YET STARTED)
+
+Robin asked (Oct 2, then again Oct 11 after the Division Series) to check
+model results against actual playoff outcomes and other public strikeout
+prop pickers. Both checks found the same pattern, and a third conversation
+(Oct 11) worked out what a real, evidence-based fix would need to include.
+This section documents that plan so it can be picked up later — **no code
+has been changed yet.**
+
+### 8.1 The evidence
+
+Pulled from the live site's `recent.json`/`performance.json` each time (not
+re-derivable later without re-pulling, since those files roll forward) —
+raw numbers kept here for reference.
+
+**Oct 2 check (wild card only, n=16 starts, Sept 29-30):** MAE 2.09 vs. the
+model's trailing-30-day regular-season MAE of 1.85 and lifetime 1.77. Mean
+signed error (point estimate minus actual) -0.52 — a real bias, not just
+noise: 10 of 16 starts came in *over* the projection. Of 6 starts that had a
+posted prop line, the model's edge picks went 2-4 for -1.70 units, and the
+market line finished closer to the actual K total than the model on 5 of
+6 (tiny sample, flagged as such at the time).
+
+Checked against publicly posted picks for the same games (DraftKings
+Network, RotoWire, Lineups.com): on the two highest-profile matchups — Cam
+Schlittler over 7.5 (actual 10) and Michael King over 4.5/5 (actual 8) —
+every outlet correctly called the over; our model projected both well
+under (5.49 and 4.40). On Payton Tolle, conversely, our model's line play
+won while a Lineups.com over-7 pick on him lost (he threw 4). So it wasn't
+"behind the market across the board" — it was specifically missing high on
+the marquee, dominant-stuff starts.
+
+**Oct 11 check (wild card + Division Series, n=50 starts through Oct 10):**
+The betting record recovered to roughly normal — 16-15 (51.6%) for -1.51
+units across 31 graded lines, with the model's point estimate closer than
+the book line on 16 of 31 (51.6%), both numbers landing right on the
+model's long-run averages (54.6% hit rate, 51.7% model-closer lifetime).
+**But the underlying projection bias did not shrink. If anything it got
+more lopsided:** 30 of 50 postseason starts came in over projection (60%),
+wild card alone was 10/18 (56%), Division Series alone was 20/32 (62.5%).
+Average error size (MAE) did improve to 1.85 postseason-wide, back near
+normal range — so the *typical* miss is a normal-sized miss, but the
+*tail* is still consistently missing low.
+
+The sharpest new data point: **Gavin Williams was underprojected by more
+than 5 strikeouts in back-to-back playoff starts** — projected 5.47,
+actual 11 (Oct 5); projected 5.61, actual 12 (Oct 10) — the second one with
+the model at 72.7% confidence on the *under*. That's the same pitcher
+fooling the model twice, which argues for a specific signal being missed
+(stuff/role change) more than generic postseason noise. Yamamoto (proj
+4.08, actual 10) and Drew Rasmussen (proj 4.66, actual 10) were the other
+standout misses — all three are swing-and-miss/high-ceiling arms blowing
+well past projection in high-leverage spots.
+
+### 8.2 Root cause, found by reading the actual adjustment code
+
+`kproj/config.py`'s `POSTSEASON_BF_MULTIPLIER = 4.35 / 5.19` (~0.838) is
+the entire postseason adjustment today. Per its own comment, it's a pure
+**quantity** discount — scales the whole predicted distribution down at
+inference time to reflect FanGraphs' 2025 finding that postseason starts
+average 4.35 IP vs. 5.19 IP in the regular season (fully-rested bullpens
+pull starters earlier), explicitly **not** a quality/rate adjustment —
+FIP is flat (~3.64) either way per that same source, so no K-rate/quality
+input is touched, only the output volume.
+
+This explains the pattern cleanly: for a pitcher whose K-rate per batter
+holds steady in the playoffs, "fewer batters faced → fewer K's" is
+correct, and that's exactly the cohort the current multiplier gets right
+(Tolle, Hagen Smith, Blubaugh all tracked close). For a pitcher whose
+per-batter K-rate is *rising* enough in these spots to offset or outrun
+the shorter outing, the multiplier has no mechanism to catch that — it can
+only ever push the number down, never up. That's the aces: Sale,
+Schlittler, King, Yamamoto, Rasmussen, Williams.
+
+Also from that same comment block: **postseason game ingestion was broken
+until Sept 2026** (`kproj/ingest/mlb_api.py` hard-filtered to
+`gameType == 'R'`, so the schedule fetch returned zero games for any
+October date — see §1). That means the database currently holds real
+postseason box scores for exactly one month: this October. Everything in
+§8.1 is drawn from essentially two pitchers having big games, not a
+trained signal.
+
+### 8.3 What a real, data-grounded adjustment needs (in order)
+
+1. **Backfill historical postseason box scores first.** Statcast/boxscore
+   ingestion already reaches back to 2022-04-07 for the regular season;
+   the postseason game-type filter (`POSTSEASON_GAME_TYPES = {"F","D","L","W"}`
+   in `kproj/config.py`) now exists and works (fixed §1), it was just never
+   run retroactively. Re-running `kproj backfill` (or a postseason-scoped
+   variant) for Octobers 2022-2025 is a data-collection step, not a
+   modeling step, and is the actual prerequisite for everything below —
+   right now there isn't enough data to fit anything.
+
+2. **Build a continuous stuff-quality tier, not a hand-picked "ace" list.**
+   Candidates already derivable from existing data: season K/9 percentile,
+   K-rate, whiff rate, fastball velocity percentile. The question to test:
+   does the postseason K-rate delta (actual K-rate per batter faced minus
+   the pitcher's own regular-season rate) scale with that tier, or is it
+   flat across pitchers and we're looking at a couple of loud outliers.
+
+3. **Compare each pitcher to their own regular-season baseline, not to a
+   pooled postseason-vs-regular-season average.** Playoff teams' pitchers
+   are already selection-biased toward better than league average, so a
+   pooled comparison would bias any adjustment upward for the wrong
+   reason. Within-pitcher (same person, same stuff, different context)
+   is the comparison that actually isolates a postseason effect.
+
+4. **Test whether the leash assumption itself holds by tier.** The
+   multiplier assumes every postseason starter gets pulled earlier. The
+   `team_leash_bf` feature (already in the model) can check this directly:
+   does batters-faced actually drop for top-tier arms in the playoffs, or
+   does the FanGraphs league-wide average get dragged down entirely by the
+   complementary-arm population? If leash doesn't shrink for the top tier,
+   the BF discount shouldn't apply to them at all, independent of any
+   rate-side correction.
+
+5. **Test plausible mechanistic covariates for correlation with the
+   residual** (not assumed, tested): same-start fastball velocity vs. the
+   pitcher's own season average (adrenaline/short-rest effect); days of
+   rest before the start (playoff starters often get extra rest); and
+   elimination-game leverage, tested as its own variable rather than
+   lumping all postseason games together (a do-or-die start may get a
+   different hook than a Game 1).
+
+6. **Use shrinkage, not a free-fit coefficient, once there's a tier-level
+   signal.** Postseason innings will always be a tiny fraction of the
+   regular-season dataset even after backfill, so any tier-level
+   adjustment should partially pool each new playoff start toward its
+   tier's group average (empirical-Bayes style) rather than letting one or
+   two marquee starts swing the whole correction — the exact failure mode
+   that would let the two Gavin Williams starts alone define the "ace"
+   tier's adjustment.
+
+7. **Backtest with the same discipline `kproj/model/train.py` already
+   uses for the main model:** fit on backfilled 2022-2024 Octobers,
+   validate on 2025, sanity-check against 2026-to-date. Acceptance bar:
+   closes the bias on the ace tier **without** re-breaking the
+   complementary-arm tier the current flat multiplier already gets right
+   — i.e. the fix should nest the existing multiplier as a floor/base
+   case and add a tier-scaled upward correction, not replace it outright.
+
+### 8.4 Status
+
+Not started. This is a backfill project first, then a validation project,
+before any change to `POSTSEASON_BF_MULTIPLIER` or the prediction code
+itself. Pick up at step 1 (§8.3) when ready to execute.
