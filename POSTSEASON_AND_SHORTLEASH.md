@@ -406,3 +406,72 @@ trained signal.
 Not started. This is a backfill project first, then a validation project,
 before any change to `POSTSEASON_BF_MULTIPLIER` or the prediction code
 itself. Pick up at step 1 (§8.3) when ready to execute.
+
+## 9. Offseason model-review plan — October 25, 2026
+
+### 9.1 What's already handled automatically
+
+No manual action is needed to train the model on the full 2026 regular
+season. `.github/workflows/retrain.yml` runs on an unconditional cron
+(`0 8 * * 1`, every Monday, year-round, no season gate) and already
+executes `kproj retrain` + `kproj export` against the complete database
+every week, including straight through the 2026 season and postseason.
+Model version timestamps confirm this has fired on schedule throughout
+the year (e.g. `v20260928_1639` → `v20261005_1700` → `v20261019_1526`).
+By the time the 2026 season is fully logged, the model will already have
+been retrained on all of it without anyone doing anything.
+
+One honest caveat: this session's GitHub API access is not enabled for
+pulling historical Actions run-duration logs (`gh run list` and the raw
+`api.github.com/.../actions/workflows/retrain.yml/runs` endpoint both
+returned 403 "GitHub access to this repository is not enabled for this
+session"), so the exact wall-clock time of a retrain run couldn't be
+confirmed empirically this session. A reasoned estimate, not a measured
+one: with roughly 104,000 training rows and 6 total LightGBM models (1
+Poisson point model + 5 quantile heads), training itself is almost
+certainly a low single-digit number of minutes; the 120-minute workflow
+timeout exists mainly as a generous ceiling, not because training is
+expected to approach it. If a precise number is ever wanted, it's a
+one-line look at the Actions tab in a browser, or pulled next session if
+GitHub API access is enabled by then.
+
+### 9.2 The actual offseason work is a planning problem, not a training one
+
+Since retraining is already fully automated, the real question for the
+winter is *what, if anything, should change* before the model trains on
+2027 data, and when to check that nothing silently broke before next
+Opening Day. Proposed four-phase plan:
+
+**Phase 1 — Now / postseason wrap-up.** Freeze an end-of-2026 baseline
+before memory of the season fades: current model version, full-season
+MAE and bias, and the full betting record (win rate, units, ROI) as of
+World Series end. This baseline is what any 2027 change gets measured
+against, and it's also what a 2027 spring-training sanity check gets
+compared to, to confirm nothing regressed over the offseason.
+
+**Phase 2 — Winter (the actual window for deliberate changes).** This is
+the one stretch of the year where a model change can be made, tested, and
+reverted with zero live betting exposure. Top item already queued: the
+§8 postseason ace-adjustment research plan above, now anchored by a
+concrete case study (Gavin Williams missed low in all 3 of his 2026
+postseason starts by an average of 5.4 K, the strongest single data
+point for why the current flat BF-discount can't be right for top-tier
+arms). Any other model ideas that come up over the winter should also
+land here, not mid-season.
+
+**Phase 3 — Spring training (~mid-February).** Before Opening Day, re-run
+a smoke test against that offseason's actual rosters and verify the MLB
+Stats API ingestion still matches the expected schema (upstream APIs
+occasionally change shape between seasons without notice). Compare
+against the Phase 1 baseline to confirm the automated weekly retrains
+over the winter (if postseason-adjacent data keeps flowing in) didn't
+drift the model somewhere unintended.
+
+**Phase 4 — Opening Day.** Normal weekly retrain cadence resumes mattering
+live; no different from how 2026 ran.
+
+### 9.3 Status
+
+Not started, this is a plan to pick up in winter, not a task for right
+now. Documented so it's sitting here ready to execute whenever Phase 2
+actually begins. No code changed as part of writing this section.
